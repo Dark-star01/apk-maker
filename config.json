@@ -1,0 +1,19 @@
+{
+  "appName": "Moonbook",
+  "appId": "com.moonbook.dark",
+  "version": "1.0.0",
+  "env": {
+    "enabled": true,
+    "vars": {
+      "WORKER_URL": "https://moonbook.ksbaakaa0.workers.dev"
+    }
+  },
+  "splash": {
+    "enabled": true,
+    "duration": 2500,
+    "backgroundColor": "#0f0f1a",
+    "textColor": "#a29bfe",
+    "footer": "من تطوير دارك",
+    "logoFile": "logo.png"
+  }
+}
