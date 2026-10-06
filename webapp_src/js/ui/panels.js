@@ -102,7 +102,8 @@ function settingsPanel() {
     row('Export size', h('span', { class: 'value' }, `${p.resolution} · ${size.width}×${size.height} · ${p.fps} fps`)),
     row('Native engine', nativeRow),
     h('div', { class: 'row' }, h('span', { class: 'hint' }, 'Tests the Web → Kotlin → Web connection'),
-      h('button', { class: 'btn', type: 'button', onclick: runPing }, 'Test bridge')));
+      h('button', { class: 'btn', type: 'button', onclick: runPing }, 'Test bridge')),
+    h('div', { class: 'hint diag', dir: 'ltr' }, bridge.diagnose().map((l) => h('div', {}, l))));
 }
 
 async function refreshNativeStatus(el) {

@@ -36,7 +36,26 @@ async function call(method, args) {
   }
 }
 
+// Plain facts about the runtime, so a failure can be classified without guessing.
+function diagnose() {
+  const cap = globalThis.Capacitor;
+  const lines = [];
+  lines.push('Capacitor object: ' + (cap ? 'yes' : 'NO'));
+  if (cap) {
+    let platform = '?', native = '?';
+    try { platform = cap.getPlatform(); } catch (e) { platform = 'error'; }
+    try { native = String(cap.isNativePlatform()); } catch (e) { native = 'error'; }
+    lines.push('Platform: ' + platform + ' · isNativePlatform: ' + native);
+    lines.push('Plugins: ' + (cap.Plugins ? Object.keys(cap.Plugins).join(', ') || '(none)' : '(no Plugins)'));
+    lines.push('PluginHeaders: ' + (cap.PluginHeaders ? cap.PluginHeaders.map((x) => x.name).join(', ') || '(none)' : '(none)'));
+  }
+  lines.push('androidBridge: ' + (globalThis.androidBridge ? 'yes' : 'no'));
+  lines.push(PLUGIN + ': ' + (plugin() ? 'registered' : 'MISSING'));
+  return lines;
+}
+
 export const bridge = {
+  diagnose,
   isNative() { return plugin() !== null; },
 
   // Health check: proves the Web -> Kotlin -> Web round trip works.
