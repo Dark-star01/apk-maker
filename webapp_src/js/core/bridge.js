@@ -1,0 +1,79 @@
+// NativeBridge — the ONLY place the web UI talks to Kotlin.
+// The UI calls these plain async functions; it never sees Capacitor or plugin names.
+// When running in a normal browser (no native side) calls degrade gracefully or reject
+// with code NO_NATIVE.
+
+const PLUGIN = 'MvmBridge';
+
+function plugin() {
+  const cap = globalThis.Capacitor;
+  return cap && cap.Plugins ? cap.Plugins[PLUGIN] || null : null;
+}
+
+// Every failure reaches the UI as an Error with a stable `code` (see ui/messages.js).
+function toError(e) {
+  const err = new Error((e && e.message) || 'Bridge error');
+  err.code = (e && e.code) || 'UNEXPECTED';
+  return err;
+}
+
+function need() {
+  const p = plugin();
+  if (!p) {
+    const err = new Error('Native engine not available');
+    err.code = 'NO_NATIVE';
+    throw err;
+  }
+  return p;
+}
+
+async function call(method, args) {
+  const p = need();
+  try {
+    return await p[method](args);
+  } catch (e) {
+    throw toError(e);
+  }
+}
+
+export const bridge = {
+  isNative() { return plugin() !== null; },
+
+  // Health check: proves the Web -> Kotlin -> Web round trip works.
+  async ping(value = 'ping') {
+    if (!plugin()) return { ok: false, native: false };
+    const res = await call('ping', { value });
+    return { ...res, native: true };
+  },
+
+  // Device facts used later to pick safe preview/export settings.
+  async getInfo() {
+    if (!plugin()) return { native: false };
+    const res = await call('getInfo');
+    return { ...res, native: true };
+  },
+
+  // Opens the Android file picker. kind: 'audio' | 'image'.
+  // Resolves { cancelled: true } or { cancelled: false, kind, media } once the file is
+  // copied into the project folder and validated.
+  pickMedia(kind, projectId) {
+    return call('pickMedia', { kind, projectId });
+  },
+
+  // Which referenced files still exist: { audio?: bool, background?: bool }.
+  checkMedia(projectId, files) {
+    return call('checkMedia', { projectId, audio: files.audio, background: files.background });
+  },
+
+  // Small JPEG data URL for the background, or null.
+  async getThumbnail(projectId, file) {
+    const res = await call('getThumbnail', { projectId, file });
+    return (res && res.dataUrl) || null;
+  },
+
+  // Removes a project's files from disk (no-op outside the app).
+  async deleteProject(projectId) {
+    if (!plugin()) return;
+    await call('deleteProject', { projectId });
+  },
+};

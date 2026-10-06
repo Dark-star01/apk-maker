@@ -1,0 +1,26 @@
+{
+  "appName": "Music Video Maker",
+  "appId": "com.dark.musicvideomaker",
+  "version": "0.1.0",
+  "capacitorVersion": "7.6.9",
+  "native": {
+    "enabled": true,
+    "mode": "merge",
+    "kotlinVersion": "1.9.24",
+    "permissions": [],
+    "extraDependencies": []
+  },
+  "env": {
+    "enabled": false,
+    "vars": {}
+  },
+  "splash": {
+    "enabled": true,
+    "duration": 1500,
+    "backgroundColor": "#080810",
+    "textColor": "#ffffff",
+    "accentColor": "#6c5ce7",
+    "subtitle": "",
+    "footer": ""
+  }
+}

@@ -1,0 +1,217 @@
+name: صناع الـAPK
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'webapp/**'
+      - 'splash/**'
+      - 'config.json'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: 🏗️ بناء APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 جلب الكود
+        uses: actions/checkout@v4
+
+      - name: 🟢 تجهيز Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: ☕ تجهيز Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: 🔧 تثبيت الأدوات المطلوبة
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y jq unzip
+
+      - name: ⚙️ قراءة config.json
+        id: config
+        run: |
+          APP_NAME=$(jq -r '.appName // "Web App"' config.json)
+          APP_ID=$(jq -r '.appId // "com.dark.webapp"' config.json)
+          VERSION=$(jq -r '.version // "1.0.0"' config.json)
+          SPLASH_ENABLED=$(jq -r '.splash.enabled // true' config.json)
+          SPLASH_DURATION=$(jq -r '.splash.duration // 2500' config.json)
+          SPLASH_COLOR=$(jq -r '.splash.backgroundColor // "#0f0f1a"' config.json)
+          SPLASH_TEXT=$(jq -r '.splash.textColor // "#a29bfe"' config.json)
+          SPLASH_FOOTER=$(jq -r '.splash.footer // ""' config.json)
+          SPLASH_LOGO=$(jq -r '.splash.logoFile // "logo.png"' config.json)
+          ENV_ENABLED=$(jq -r '.env.enabled // false' config.json)
+          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+          echo "app_id=$APP_ID" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "splash_enabled=$SPLASH_ENABLED" >> $GITHUB_OUTPUT
+          echo "splash_duration=$SPLASH_DURATION" >> $GITHUB_OUTPUT
+          echo "splash_color=$SPLASH_COLOR" >> $GITHUB_OUTPUT
+          echo "splash_text=$SPLASH_TEXT" >> $GITHUB_OUTPUT
+          echo "splash_footer=$SPLASH_FOOTER" >> $GITHUB_OUTPUT
+          echo "splash_logo=$SPLASH_LOGO" >> $GITHUB_OUTPUT
+          echo "env_enabled=$ENV_ENABLED" >> $GITHUB_OUTPUT
+          echo "📱 $APP_NAME | 🆔 $APP_ID | 🏷️ v$VERSION"
+
+      - name: 🔍 البحث عن ملف ZIP
+        id: find_zip
+        run: |
+          ZIP_FILE=$(ls -t webapp/*.zip 2>/dev/null | head -1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "❌ لم يتم العثور على ملف ZIP في مجلد webapp/"
+            exit 1
+          fi
+          echo "✅ تم العثور على: $ZIP_FILE"
+          echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
+
+      - name: 📦 فك ضغط التطبيق
+        id: extract
+        run: |
+          mkdir -p workspace
+          unzip -q "${{ steps.find_zip.outputs.zip_file }}" -d workspace/extracted
+          PROJECT_ROOT="workspace/extracted"
+          if [ $(ls workspace/extracted | wc -l) -eq 1 ]; then
+            INNER=$(ls workspace/extracted)
+            if [ -d "workspace/extracted/$INNER" ]; then
+              if [ -f "workspace/extracted/$INNER/index.html" ] || [ -f "workspace/extracted/$INNER/package.json" ]; then
+                PROJECT_ROOT="workspace/extracted/$INNER"
+              fi
+            fi
+          fi
+          echo "project_root=$PROJECT_ROOT" >> $GITHUB_OUTPUT
+          echo "✅ جذر المشروع: $PROJECT_ROOT"
+
+      - name: 🔬 تحديد نوع المشروع
+        id: detect
+        run: |
+          ROOT="${{ steps.extract.outputs.project_root }}"
+          if [ -f "$ROOT/package.json" ]; then
+            echo "type=node" >> $GITHUB_OUTPUT
+          else
+            echo "type=static" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 🏗️ بناء تطبيق الويب
+        if: steps.detect.outputs.type == 'node'
+        working-directory: ${{ steps.extract.outputs.project_root }}
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          if grep -q '"build"' package.json; then npm run build; fi
+
+      - name: 📁 تجهيز مجلد www
+        run: |
+          ROOT="${{ steps.extract.outputs.project_root }}"
+          TYPE="${{ steps.detect.outputs.type }}"
+          mkdir -p www
+          CANDIDATES=("dist" "build" "out" "public" ".output/public" ".next/out" "www")
+          if [ "$TYPE" = "node" ]; then
+            FOUND=0
+            for dir in "${CANDIDATES[@]}"; do
+              if [ -f "$ROOT/$dir/index.html" ]; then
+                cp -r "$ROOT/$dir"/* www/
+                FOUND=1
+                break
+              fi
+            done
+            if [ "$FOUND" -eq 0 ]; then cp -r "$ROOT"/* www/ 2>/dev/null || true; fi
+          else
+            cp -r "$ROOT"/* www/
+          fi
+          if [ ! -f "www/index.html" ]; then
+            echo "❌ index.html غير موجود!"
+            exit 1
+          fi
+          echo "✅ مجلد www جاهز"
+
+      # ===== حقن env.js من config.json =====
+      - name: 🔐 حقن متغيرات البيئة
+        if: steps.config.outputs.env_enabled == 'true'
+        run: |
+          echo "🔐 تجهيز env.js..."
+
+          # استخراج المفاتيح والقيم من config.json
+          # المتوقع: { "env": { "enabled": true, "vars": { "KEY": "value" } } }
+
+          jq -r '
+            .env.vars // {} |
+            to_entries |
+            map("  " + .key + ": \"" + (.value | tostring | gsub("\\\\"; "\\\\\\\\") | gsub("\""; "\\\\\"")) + "\"") |
+            "window.ENV = {\n" + join(",\n") + "\n};"
+          ' config.json > www/env.js
+
+          # التحقق
+          if [ ! -s www/env.js ]; then
+            echo "⚠️ env.js فاضي، نضع قيمة افتراضية"
+            echo "window.ENV = {};" > www/env.js
+          fi
+
+          # حقن env.js في index.html قبل splash.js (أو قبل </head>)
+          if grep -q 'splash.js' www/index.html; then
+            sed -i 's|<script src="splash.js"></script>|<script src="env.js"></script><script src="splash.js"></script>|' www/index.html
+          else
+            sed -i 's|</head>|<script src="env.js"></script></head>|' www/index.html
+          fi
+
+          echo "✅ env.js:"
+          cat www/env.js
+
+      # ===== حقن شاشة البداية =====
+      - name: 🎬 حقن شاشة البداية
+        if: steps.config.outputs.splash_enabled == 'true'
+        run: |
+          cp splash/splash.js www/splash.js
+          if [ -f "splash/${{ steps.config.outputs.splash_logo }}" ]; then
+            cp "splash/${{ steps.config.outputs.splash_logo }}" www/splash-logo.png
+          fi
+          sed -i "s|appName: \"تطبيقي\"|appName: \"${{ steps.config.outputs.app_name }}\"|" www/splash.js
+          sed -i "s|footer: \"\"|footer: \"${{ steps.config.outputs.splash_footer }}\"|" www/splash.js
+          sed -i "s|duration: 2000|duration: ${{ steps.config.outputs.splash_duration }}|" www/splash.js
+          sed -i "s|bgColor: \"#0f0f1a\"|bgColor: \"${{ steps.config.outputs.splash_color }}\"|" www/splash.js
+          sed -i "s|textColor: \"#a29bfe\"|textColor: \"${{ steps.config.outputs.splash_text }}\"|" www/splash.js
+          sed -i 's|</body>|<script src="splash.js"></script></body>|' www/index.html
+          echo "✅ تم حقن شاشة البداية"
+
+      - name: 📦 تثبيت Capacitor
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+
+      - name: 🚀 تهيئة Capacitor
+        run: |
+          npx cap init "${{ steps.config.outputs.app_name }}" "${{ steps.config.outputs.app_id }}" --web-dir=www
+
+      - name: 🤖 إضافة منصة أندرويد
+        run: npx cap add android
+
+      - name: 🔧 إصلاح تعارض Kotlin
+        run: |
+          printf '\n\n// ===== إصلاح تعارض Kotlin =====\nallprojects {\n    configurations.all {\n        resolutionStrategy {\n            force "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"\n            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24"\n            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24"\n        }\n    }\n}\n' >> android/build.gradle
+          echo "✅ تم إضافة إصلاح Kotlin"
+          tail -15 android/build.gradle
+
+      - name: 🎨 تكوين شاشة البداية الأصلية
+        run: |
+          printf '{\n  "appId": "%s",\n  "appName": "%s",\n  "webDir": "www",\n  "plugins": {\n    "SplashScreen": {\n      "launchShowDuration": 0,\n      "launchAutoHide": true,\n      "backgroundColor": "%s",\n      "androidSplashResourceName": "splash",\n      "androidScaleType": "CENTER_CROP",\n      "showSpinner": false,\n      "splashFullScreen": true,\n      "splashImmersive": true\n    }\n  }\n}\n' "${{ steps.config.outputs.app_id }}" "${{ steps.config.outputs.app_name }}" "${{ steps.config.outputs.splash_color }}" > capacitor.config.json
+          cat capacitor.config.json
+
+      - name: 🔄 مزامنة الملفات
+        run: npx cap sync android
+
+      - name: 🔨 بناء APK
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: 📤 رفع APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.config.outputs.app_name }}-v${{ steps.config.outputs.version }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#080810">
+  <title>Music Video Maker</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <button id="btn-project" class="chip" type="button"><span id="project-name">Project</span><span class="caret">▾</span></button>
+      <button id="btn-export" class="primary" type="button">Export</button>
+    </header>
+
+    <!-- Stage: the native renderer view will be placed over #preview (same rect) from Phase 6 -->
+    <section class="stage" id="stage">
+      <div id="preview" class="preview-frame">
+        <div class="preview-label">
+          <strong>PREVIEW</strong>
+          <span id="preview-info"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="transport">
+      <button id="btn-play" class="play" type="button" disabled aria-label="Play">▶</button>
+      <span id="time-current" class="time">00:00</span>
+      <input id="seek" type="range" min="0" max="1000" value="0" disabled aria-label="Seek">
+      <span id="time-total" class="time">00:00</span>
+    </section>
+
+    <section class="tracks" id="tracks" aria-label="Timeline"></section>
+
+    <section class="panel" id="panel"></section>
+
+    <nav class="tabs" id="tabs">
+      <button type="button" data-tab="media" class="active">Media</button>
+      <button type="button" data-tab="wave">Wave</button>
+      <button type="button" data-tab="settings">Settings</button>
+    </nav>
+  </div>
+
+  <div id="overlay" hidden></div>
+  <div id="toast" dir="auto" hidden></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
