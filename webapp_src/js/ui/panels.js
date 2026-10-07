@@ -97,13 +97,15 @@ function settingsPanel() {
   const size = outputSize(p.aspectRatio, p.resolution);
   const nativeRow = h('span', { class: 'value', id: 'native-status' }, 'Checking…');
   refreshNativeStatus(nativeRow);
+  const diagNative = h('div', { style: { whiteSpace: 'pre-wrap' } }, '…');
+  bridge.nativeReport().then((t) => { diagNative.textContent = t; });
   return h('div', {},
     row('Aspect ratio', h('span', { class: 'value' }, p.aspectRatio)),
     row('Export size', h('span', { class: 'value' }, `${p.resolution} · ${size.width}×${size.height} · ${p.fps} fps`)),
     row('Native engine', nativeRow),
     h('div', { class: 'row' }, h('span', { class: 'hint' }, 'Tests the Web → Kotlin → Web connection'),
       h('button', { class: 'btn', type: 'button', onclick: runPing }, 'Test bridge')),
-    h('div', { class: 'hint diag', dir: 'ltr' }, bridge.diagnose().map((l) => h('div', {}, l))));
+    h('div', { class: 'hint diag', dir: 'ltr' }, bridge.diagnose().map((l) => h('div', {}, l)), diagNative));
 }
 
 async function refreshNativeStatus(el) {

@@ -13,3 +13,4 @@ if grep -rl "__APP_ID" "$DIR" >/dev/null 2>&1; then fail "unreplaced __APP_ID pl
 grep -q "^package $APP_ID" "$DIR/MainActivity.kt" || fail "MainActivity package != appId"
 [ -f www/index.html ] && grep -q 'js/main.js' www/index.html || fail "www/index.html is not the Music Video Maker app"
 echo "✅ MVM guard: native bridge files are in place ($(find "$DIR" -name '*.kt' | wc -l) Kotlin files)"
+[ -f "$DIR/bridge/MvmDiagPlugin.kt" ] && [ -f "$DIR/bridge/BootDiag.kt" ] || { echo "❌ MVM guard: diag plugin files missing"; exit 1; }

@@ -54,8 +54,17 @@ function diagnose() {
   return lines;
 }
 
+// Asks the always-registered MvmDiag plugin what native registration really did (works even if MvmBridge is missing).
+async function nativeReport() {
+  const cap = globalThis.Capacitor;
+  const d = cap && cap.Plugins ? cap.Plugins.MvmDiag : null;
+  if (!d) return 'MvmDiag: MISSING (native files / MainActivity.kt not in this APK)';
+  try { const r = await d.report(); return r.text; } catch (e) { return 'MvmDiag error: ' + ((e && e.message) || e); }
+}
+
 export const bridge = {
   diagnose,
+  nativeReport,
   isNative() { return plugin() !== null; },
 
   // Health check: proves the Web -> Kotlin -> Web round trip works.
