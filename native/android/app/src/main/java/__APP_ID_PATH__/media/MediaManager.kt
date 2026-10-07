@@ -116,6 +116,13 @@ class MediaManager(context: Context) {
         return "data:image/jpeg;base64," + Base64.encodeToString(f.readBytes(), Base64.NO_WRAP)
     }
 
+    /** Removes one imported media kind ("audio" or "image") from the project folder. */
+    fun removeMedia(projectId: String, kind: String) {
+        val dir = files.dir(projectId)
+        if (!dir.isDirectory) return
+        if (kind == "audio") files.removeByPrefix(dir, "audio.") else files.removeByPrefix(dir, "background.", "background_thumb.")
+    }
+
     fun deleteProject(projectId: String) {
         files.deleteProject(projectId)
     }

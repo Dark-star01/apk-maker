@@ -115,3 +115,4 @@ input[type=text] { width: 100%; min-height: 44px; padding: 0 12px; border-radius
   background: rgba(0, 0, 0, .5); padding: 2px 8px; border-radius: 4px; }
 .lane-bar.ready { border-style: solid; border-color: transparent; }
 .hint.diag { font-family: monospace; font-size: 11px; word-break: break-all; padding-top: 8px; }
+.btns { display: flex; gap: 8px; flex: none; }

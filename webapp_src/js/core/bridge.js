@@ -100,6 +100,11 @@ export const bridge = {
   },
 
   // Removes a project's files from disk (no-op outside the app).
+  async removeMedia(projectId, kind) {
+    if (!plugin()) return;
+    await call('removeMedia', { projectId, kind });
+  },
+
   async deleteProject(projectId) {
     if (!plugin()) return;
     await call('deleteProject', { projectId });

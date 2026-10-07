@@ -40,6 +40,18 @@ export async function pick(kind) {
   }
 }
 
+// Removes the audio or background from the project and deletes its files.
+export async function remove(kind) {
+  const project = state.project;
+  if (!project || state.busy[kind]) return;
+  if (!confirm(kind === 'audio' ? 'Remove the audio?' : 'Remove the background?')) return;
+  mutate((p) => { if (kind === 'audio') p.media.audio = null; else p.media.background = null; });
+  state.mediaOk[FIELD[kind]] = true;
+  if (kind === 'image') state.thumb = null;
+  emit();
+  try { await bridge.removeMedia(project.id, kind); } catch (e) { /* leftover file is harmless; the project no longer references it */ }
+}
+
 // Called whenever a project is opened: flags missing files and loads the thumbnail.
 export async function verify() {
   const project = state.project;

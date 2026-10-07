@@ -176,6 +176,21 @@ class MvmBridgePlugin : Plugin() {
         }
     }
 
+    // JS: await ...removeMedia({ projectId, kind: "audio" | "image" }) — deletes that media's files.
+    @PluginMethod
+    fun removeMedia(call: PluginCall) {
+        try {
+            val projectId = call.getString("projectId")
+                ?: throw MediaException(MediaException.BAD_REQUEST, "projectId is required")
+            val kind = call.getString("kind")
+            if (kind != KIND_AUDIO && kind != KIND_IMAGE) throw MediaException(MediaException.BAD_REQUEST, "bad kind")
+            media.removeMedia(projectId, kind)
+            call.resolve()
+        } catch (t: Throwable) {
+            fail(call, t)
+        }
+    }
+
     // JS: await ...deleteProject({ projectId }) — removes the project's files from disk.
     @PluginMethod
     fun deleteProject(call: PluginCall) {

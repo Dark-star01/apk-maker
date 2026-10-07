@@ -66,6 +66,14 @@ draws the video. Audio analysis (volume/bass/mid/treble) is computed once into a
 - Errors cross the bridge as stable codes (`UNSUPPORTED_AUDIO`, `NO_SPACE`, …); wording lives in `js/ui/messages.js` (Arabic).
 - The preview picture in Phase 2 is only the thumbnail as a static stand-in; the real renderer arrives in Phase 6.
 
+## Native build path (learned the hard way)
+
+- `native/` must sit in the repo ROOT next to `config.json`. APKMaker silently skips a missing/misplaced `native/`.
+- Guards (keep them): `native.py diagcheck` (workflow, after `files` and after `cap sync`), `hooks/pre-build.sh`,
+  `hooks/post-build.sh` (checks the dex inside the APK). `MvmDiag` plugin + `BootDiag` show registration facts in Settings.
+- Phase 2 verified on a real APK: MvmDiag/MvmBridge registered, Test bridge = Bridge OK.
+- `removeMedia({projectId, kind})` deletes a project's audio or background files (Remove buttons in the Media panel).
+
 ## Known limitations
 
 - If Android kills the app while the file picker is open, the pending pick is lost; just pick again.

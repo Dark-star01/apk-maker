@@ -3,7 +3,7 @@ import { h, clear, $, toast, formatTime } from './dom.js';
 import { state, mutate } from './state.js';
 import { WAVE_STYLES, outputSize } from '../core/schema.js';
 import { bridge } from '../core/bridge.js';
-import { pick } from './media.js';
+import { pick, remove } from './media.js';
 import { MSG } from './messages.js';
 
 const LABELS = { line: 'Line', bars: 'Bars', mirrored: 'Mirrored', bottom: 'Bottom', custom: 'Custom', manual: 'Manual', adaptive: 'Adaptive' };
@@ -63,12 +63,16 @@ function mediaPanel() {
   return h('div', {},
     row('Audio', h('span', { class: 'value ' + a.status, dir: 'auto' }, a.status === 'empty' ? 'Not selected' : a.text)),
     h('div', { class: 'row' }, h('span', { class: 'hint' }, 'MP3 · WAV · M4A · AAC'),
-      h('button', { class: 'btn', type: 'button', disabled: state.busy.audio, onclick: () => pick('audio') },
-        media.audio ? 'Replace audio' : 'Choose audio')),
+      h('div', { class: 'btns' },
+        h('button', { class: 'btn', type: 'button', disabled: state.busy.audio, onclick: () => pick('audio') },
+          media.audio ? 'Replace audio' : 'Choose audio'),
+        media.audio ? h('button', { class: 'btn', type: 'button', disabled: state.busy.audio, onclick: () => remove('audio') }, 'Remove') : null)),
     row('Background', h('span', { class: 'value ' + b.status, dir: 'auto' }, b.status === 'empty' ? 'Not selected' : b.text)),
     h('div', { class: 'row' }, h('span', { class: 'hint' }, 'JPG · PNG · WEBP'),
-      h('button', { class: 'btn', type: 'button', disabled: state.busy.image, onclick: () => pick('image') },
-        media.background ? 'Replace image' : 'Choose image')));
+      h('div', { class: 'btns' },
+        h('button', { class: 'btn', type: 'button', disabled: state.busy.image, onclick: () => pick('image') },
+          media.background ? 'Replace image' : 'Choose image'),
+        media.background ? h('button', { class: 'btn', type: 'button', disabled: state.busy.image, onclick: () => remove('image') }, 'Remove') : null)));
 }
 
 function wavePanel() {
