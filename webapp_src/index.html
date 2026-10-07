@@ -20,6 +20,7 @@
         <div class="preview-label">
           <strong>PREVIEW</strong>
           <span id="preview-info"></span>
+          <span id="preview-time" class="preview-time">00:00 / 00:00</span>
         </div>
       </div>
     </section>
@@ -31,7 +32,11 @@
       <span id="time-total" class="time">00:00</span>
     </section>
 
-    <section class="tracks" id="tracks" aria-label="Timeline"></section>
+    <section class="tracks" id="tracks" aria-label="Timeline">
+      <div class="ruler" dir="ltr"><span>00:00</span><span id="ruler-mid">00:00</span><span id="ruler-end">00:00</span></div>
+      <div id="lanes"></div>
+      <div id="playhead" class="playhead" hidden></div>
+    </section>
 
     <section class="panel" id="panel"></section>
 

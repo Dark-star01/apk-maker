@@ -38,12 +38,13 @@ function backgroundView() {
 
 // ── Timeline lanes ──
 export function renderTracks() {
-  const root = $('#tracks');
+  const root = $('#lanes');
   clear(root);
   const lanes = [
     { title: '🎵 AUDIO', view: audioView(), color: 'var(--lane-audio)' },
     { title: '🖼 BACKGROUND', view: backgroundView(), color: 'var(--lane-bg)' },
-    { title: '〰 WAVE', view: { status: 'ready', text: LABELS[state.project.wave.style] }, color: 'var(--lane-wave)' },
+    // Placeholder slot: Phase 4 draws the real waveform here (data from the analysis track).
+    { title: '〰 WAVE', view: { status: 'slot', text: `${LABELS[state.project.wave.style]} · waveform data comes in a later phase` }, color: 'var(--lane-wave)' },
   ];
   for (const l of lanes) {
     const ready = l.view.status === 'ready';

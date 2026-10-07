@@ -1,7 +1,7 @@
 (function() {
     // ====== الإعدادات (الأداة تعدلها أثناء البناء) ======
     const SPLASH_CONFIG = {
-        appName: "تطبيقي",
+        appName: "by Dark",
         footer: "",
         duration: 2000,
         bgColor: "#0f0f1a",

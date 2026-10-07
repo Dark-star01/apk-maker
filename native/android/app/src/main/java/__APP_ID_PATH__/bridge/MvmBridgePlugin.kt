@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.activity.result.ActivityResult
+import __APP_ID__.audio.AudioEngine
 import __APP_ID__.media.MediaException
 import __APP_ID__.media.MediaManager
 import com.getcapacitor.JSObject
@@ -32,6 +33,7 @@ class MvmBridgePlugin : Plugin() {
 
     private val io: ExecutorService = Executors.newSingleThreadExecutor()
     private val media by lazy { MediaManager(context) }
+    private val engine by lazy { AudioEngine(context) { snap -> notifyListeners("playback", snapshotJs(snap)) } }
 
     // ── Diagnostics ─────────────────────────────────────────────────────────
 
@@ -204,6 +206,78 @@ class MvmBridgePlugin : Plugin() {
         }
     }
 
+    // ── Playback (Phase 3) ──────────────────────────────────────────────────
+    // All commands run on the main thread inside AudioEngine; every result is the same
+    // snapshot shape { state, positionMs, durationMs, error? }. While playing, the same
+    // snapshot is pushed to JS as the "playback" event (4 per second).
+
+    // JS: await ...loadAudio({ projectId, file })
+    @PluginMethod
+    fun loadAudio(call: PluginCall) {
+        val projectId = call.getString("projectId")
+        val file = call.getString("file")
+        engine.runOnMain {
+            try {
+                if (projectId.isNullOrBlank() || file.isNullOrBlank()) {
+                    throw MediaException(MediaException.BAD_REQUEST, "projectId and file are required")
+                }
+                val f = media.resolve(projectId, file)
+                    ?: throw MediaException(MediaException.AUDIO_MISSING, "Audio file is missing")
+                engine.load(f) { code ->
+                    if (code == null) call.resolve(snapshotJs(engine.snapshot()))
+                    else call.reject("Cannot play this audio file", code)
+                }
+            } catch (t: Throwable) {
+                fail(call, t)
+            }
+        }
+    }
+
+    @PluginMethod
+    fun play(call: PluginCall) = onMain(call) { engine.play() }
+
+    @PluginMethod
+    fun pause(call: PluginCall) = onMain(call) { engine.pause() }
+
+    // JS: await ...seek({ positionMs })
+    @PluginMethod
+    fun seek(call: PluginCall) {
+        val pos = call.getDouble("positionMs")
+        onMain(call) {
+            if (pos == null || pos.isNaN()) throw MediaException(MediaException.BAD_REQUEST, "positionMs is required")
+            engine.seek(pos.toLong())
+        }
+    }
+
+    @PluginMethod
+    fun stop(call: PluginCall) = onMain(call) { engine.stop() }
+
+    @PluginMethod
+    fun getPlaybackState(call: PluginCall) = onMain(call) { }
+
+    @PluginMethod
+    fun releaseAudio(call: PluginCall) = onMain(call) { engine.release(silent = true) }
+
+    private fun onMain(call: PluginCall, block: () -> Unit) {
+        engine.runOnMain {
+            try {
+                block()
+                call.resolve(snapshotJs(engine.snapshot()))
+            } catch (t: Throwable) {
+                fail(call, t)
+            }
+        }
+    }
+
+    private fun snapshotJs(s: AudioEngine.Snapshot): JSObject {
+        val o = JSObject()
+        o.put("state", s.state.wire)
+        o.put("positionMs", s.positionMs)
+        o.put("durationMs", s.durationMs)
+        if (s.errorCode != null) o.put("error", s.errorCode)
+        return o
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private fun fail(call: PluginCall, t: Throwable) {
@@ -215,7 +289,14 @@ class MvmBridgePlugin : Plugin() {
         }
     }
 
+    // No background playback service in the MVP: leaving the app pauses the audio.
+    override fun handleOnPause() {
+        engine.runOnMain { engine.pauseIfPlaying() }
+        super.handleOnPause()
+    }
+
     override fun handleOnDestroy() {
+        engine.runOnMain { engine.release(silent = true) }
         io.shutdown()
         super.handleOnDestroy()
     }

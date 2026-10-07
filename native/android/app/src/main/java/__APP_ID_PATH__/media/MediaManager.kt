@@ -103,6 +103,12 @@ class MediaManager(context: Context) {
         }
     }
 
+    /** The project file if it exists and is non-empty, else null. Throws BAD_REQUEST for unsafe names. */
+    fun resolve(projectId: String, name: String): File? {
+        val f = files.file(projectId, name)
+        return if (f.isFile && f.length() > 0L) f else null
+    }
+
     /** True when the project file is still there (the user or the OS may have removed it). */
     fun exists(projectId: String, name: String): Boolean {
         val f = files.file(projectId, name)

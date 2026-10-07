@@ -1,10 +1,11 @@
 // App bootstrap: wires state -> views and the static controls.
-import { $, formatTime } from './ui/dom.js';
+import { $ } from './ui/dom.js';
 import { state, subscribe, setProject, setTab, isBusy } from './ui/state.js';
 import { renderTracks, renderPanel, renderTabs } from './ui/panels.js';
 import { renderPreview, fitPreview } from './ui/preview.js';
 import { openNewProject, openProjects, openExport } from './ui/dialogs.js';
 import { verify } from './ui/media.js';
+import { sync, draw, initPlayback } from './ui/playback.js';
 import { store } from './core/store.js';
 
 let lastProjectId = null;
@@ -17,16 +18,13 @@ function render() {
   $('#btn-project').disabled = busy;
   $('#btn-export').disabled = busy;
 
-  // Timeline values (the transport itself is enabled in Phase 3).
-  const audio = state.project.media.audio;
-  $('#time-current').textContent = formatTime(0);
-  $('#time-total').textContent = formatTime(audio ? audio.durationMs : 0);
-
   renderTabs();
   renderTracks();
   renderPanel();
   renderPreview();
   fitPreview();
+  sync();      // (re)load the native player only if project/audio changed
+  draw(true);  // transport, playhead, time labels
 
   // A different project was opened: check that its files still exist.
   if (state.project.id !== lastProjectId) {
@@ -38,6 +36,7 @@ function render() {
 async function start() {
   subscribe(render);
 
+  initPlayback();
   $('#btn-project').addEventListener('click', openProjects);
   $('#btn-export').addEventListener('click', () => { if (state.project) openExport(); });
   $('#tabs').addEventListener('click', (e) => {

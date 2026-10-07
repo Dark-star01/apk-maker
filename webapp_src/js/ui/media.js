@@ -23,7 +23,7 @@ export async function pick(kind) {
     if (kind === 'audio') {
       const audio = sanitizeAudio(res.media);
       if (!audio) throw Object.assign(new Error('Bad audio result'), { code: 'BAD_AUDIO' });
-      mutate((p) => { p.media.audio = audio; });
+      mutate((p) => { p.media.audio = audio; p.playhead.positionMs = 0; });
     } else {
       const bg = sanitizeBackground(res.media);
       if (!bg) throw Object.assign(new Error('Bad image result'), { code: 'BAD_IMAGE' });
@@ -45,7 +45,7 @@ export async function remove(kind) {
   const project = state.project;
   if (!project || state.busy[kind]) return;
   if (!confirm(kind === 'audio' ? 'Remove the audio?' : 'Remove the background?')) return;
-  mutate((p) => { if (kind === 'audio') p.media.audio = null; else p.media.background = null; });
+  mutate((p) => { if (kind === 'audio') { p.media.audio = null; p.playhead.positionMs = 0; } else p.media.background = null; });
   state.mediaOk[FIELD[kind]] = true;
   if (kind === 'image') state.thumb = null;
   emit();

@@ -100,6 +100,23 @@ export const bridge = {
   },
 
   // Removes a project's files from disk (no-op outside the app).
+  // ── Playback (all of it runs in Kotlin; JS only sends commands and shows the state) ──
+  // Every command resolves the same snapshot: { state, positionMs, durationMs, error? }
+  // state: idle | ready | playing | paused | ended | error
+  loadAudio(projectId, file) { return call('loadAudio', { projectId, file }); },
+  play() { return call('play'); },
+  pause() { return call('pause'); },
+  seek(positionMs) { return call('seek', { positionMs: Math.round(positionMs) }); },
+  stop() { return call('stop'); },
+  getPlaybackState() { return call('getPlaybackState'); },
+  releaseAudio() { return call('releaseAudio'); },
+  // Native pushes the snapshot 4x/second while playing and on every state change.
+  onPlayback(cb) {
+    const p = plugin();
+    if (!p || typeof p.addListener !== 'function') return null;
+    try { return p.addListener('playback', cb); } catch (e) { return null; }
+  },
+
   async removeMedia(projectId, kind) {
     if (!plugin()) return;
     await call('removeMedia', { projectId, kind });

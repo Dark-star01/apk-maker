@@ -11,7 +11,13 @@ export const state = {
   busy: { audio: false, image: false }, // an import is in progress
   mediaOk: { audio: true, background: true }, // false => referenced file is missing on disk
   thumb: null, // { file, url } data URL of the background thumbnail
+  play: freshPlay(), // playback mirror of the native AudioEngine (see ui/playback.js)
 };
+
+export function freshPlay() {
+  // status: idle | loading | ready | playing | paused | ended | error
+  return { status: 'idle', positionMs: 0, durationMs: 0, at: 0, error: null };
+}
 
 const listeners = new Set();
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
@@ -20,6 +26,8 @@ export function emit() { listeners.forEach((fn) => fn(state)); }
 let saveTimer = 0;
 let saveWarned = false;
 let dirty = false;
+
+export async function flushSave() { await saveNow(); }
 
 async function saveNow() {
   clearTimeout(saveTimer);
@@ -48,6 +56,7 @@ export function setProject(project) {
   state.busy = { audio: false, image: false };
   state.mediaOk = { audio: true, background: true };
   state.thumb = null;
+  state.play = freshPlay();
   emit();
 }
 

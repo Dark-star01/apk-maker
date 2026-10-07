@@ -66,6 +66,15 @@ draws the video. Audio analysis (volume/bass/mid/treble) is computed once into a
 - Errors cross the bridge as stable codes (`UNSUPPORTED_AUDIO`, `NO_SPACE`, …); wording lives in `js/ui/messages.js` (Arabic).
 - The preview picture in Phase 2 is only the thumbnail as a static stand-in; the real renderer arrives in Phase 6.
 
+## Phase 3 decisions (playback + timeline)
+
+- Player: platform `MediaPlayer` (no Media3 → no new dependency). It streams the project file from disk; audio is never loaded into RAM or analysed in JS.
+- `audio/AudioEngine.kt` is the timeline clock. All its calls run on the main thread; the plugin wraps every command (`loadAudio`, `play`, `pause`, `seek`, `stop`, `getPlaybackState`, `releaseAudio`) and always answers one snapshot `{state, positionMs, durationMs, error?}`.
+- While playing, native pushes the same snapshot as the `playback` event 4x/s. JS extrapolates between pushes and redraws at most 20x/s (text + one `transform`, no DOM growth). A stale-clock watchdog polls `getPlaybackState` if pushes stop.
+- `timeline/RenderState.kt` and `js/core/timeline.js renderStateAt()` are the shape the single Kotlin FrameRenderer will consume (Phase 6). Wave data plugs in at `wave.data` (Phase 4).
+- Leaving the app pauses audio (no background service). Position is saved in the project (`playhead.positionMs`) and restored paused on reopen.
+- Seeking uses `SEEK_CLOSEST` on API 26+; VBR MP3 seeks can be a little off on older Android.
+
 ## Native build path (learned the hard way)
 
 - `native/` must sit in the repo ROOT next to `config.json`. APKMaker silently skips a missing/misplaced `native/`.

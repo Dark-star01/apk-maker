@@ -8,6 +8,7 @@ export const MSG = {
   needNative: 'هذه الميزة تعمل داخل التطبيق فقط وليس في المتصفح.',
   unexpected: 'حدث خطأ غير متوقع. حاول مرة أخرى.',
   audioMissing: 'ملف الصوت مفقود. اختر الملف مرة أخرى.',
+  noAudio: 'لا يوجد ملف صوت. اختر ملفًا صوتيًا أولًا.',
   backgroundMissing: 'ملف الصورة مفقود. اختر الصورة مرة أخرى.',
 };
 
@@ -20,6 +21,10 @@ const ERRORS = {
   NO_SPACE: 'مساحة التخزين غير كافية. احذف بعض الملفات وحاول مرة أخرى.',
   READ_FAILED: 'تعذر قراءة الملف المحدد. اختر الملف مرة أخرى.',
   STORAGE_FAILED: 'تعذر حفظ الملف داخل المشروع. تحقق من مساحة التخزين.',
+  AUDIO_MISSING: MSG.audioMissing,
+  AUDIO_UNPLAYABLE: 'تعذر تشغيل ملف الصوت. جرّب ملفًا آخر.',
+  PLAYER_FAILED: 'توقف المشغّل بسبب خطأ. اضغط تشغيل للمحاولة مرة أخرى.',
+  NO_AUDIO: MSG.noAudio,
   NO_NATIVE: MSG.needNative,
 };
 

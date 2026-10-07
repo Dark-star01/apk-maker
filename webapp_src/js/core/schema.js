@@ -43,6 +43,8 @@ export function defaults() {
       zoom: 1.05,
       pan: true,
     },
+    // Where the user left off (ms). Restored paused when the project is reopened.
+    playhead: { positionMs: 0 },
     // Reserved so future engines can store settings without a schema bump.
     extensions: {},
   };
@@ -122,6 +124,7 @@ export function normalizeProject(raw) {
   p.backgroundMotion.zoom = clamp(Number(p.backgroundMotion.zoom), 1, 1.3, d.backgroundMotion.zoom);
   p.media.audio = sanitizeAudio(p.media.audio);
   p.media.background = sanitizeBackground(p.media.background);
+  p.playhead.positionMs = nonNeg(p.playhead.positionMs);
   p.fps = 30; // fixed in MVP
   p.name = String(p.name || 'Untitled').slice(0, 60);
   return p;

@@ -116,3 +116,17 @@ input[type=text] { width: 100%; min-height: 44px; padding: 0 12px; border-radius
 .lane-bar.ready { border-style: solid; border-color: transparent; }
 .hint.diag { font-family: monospace; font-size: 11px; word-break: break-all; padding-top: 8px; }
 .btns { display: flex; gap: 8px; flex: none; }
+
+/* Timeline (Phase 3) */
+.tracks { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
+.tracks.seekable { cursor: pointer; }
+.ruler { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; padding: 0 1px; }
+.playhead { position: absolute; top: 0; bottom: 4px; left: 12px; width: 2px; margin-left: -1px; background: var(--accent-2); border-radius: 1px; pointer-events: none; will-change: transform; z-index: 2; box-shadow: 0 0 6px rgba(162, 155, 254, .8); }
+.playhead::before { content: ""; position: absolute; top: 0; left: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent-2); }
+.playhead[hidden] { display: none; }
+.lane-bar.slot { border-style: dashed; border-color: var(--lane-wave); background: transparent; }
+.lane-bar.slot .name { color: var(--muted); }
+.preview-time { font-variant-numeric: tabular-nums; }
+.play { font-size: 18px; }
+#lanes { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.tracks { gap: 2px; }

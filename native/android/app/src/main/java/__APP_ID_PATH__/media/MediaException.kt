@@ -15,5 +15,11 @@ class MediaException(val code: String, message: String, cause: Throwable? = null
         const val NO_SPACE = "NO_SPACE"
         const val READ_FAILED = "READ_FAILED"
         const val STORAGE_FAILED = "STORAGE_FAILED"
+
+        // Playback (Phase 3)
+        const val AUDIO_MISSING = "AUDIO_MISSING"
+        const val AUDIO_UNPLAYABLE = "AUDIO_UNPLAYABLE"
+        const val NO_AUDIO = "NO_AUDIO"
+        const val PLAYER_FAILED = "PLAYER_FAILED"
     }
 }
