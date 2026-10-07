@@ -1,4 +1,7 @@
-name: صناع الـAPK
+name: صناع الـAPK 2.0
+
+# المنطق المعقد (دمج المانيفست وgradle، الأذونات، Kotlin، Compose، البلاجنات)
+# موجود في .github/scripts/ عشان يبقى هذا الملف نظيف وبدون heredocs.
 
 on:
   push:
@@ -6,8 +9,13 @@ on:
     paths:
       - 'webapp/**'
       - 'splash/**'
+      - 'native/**'
+      - 'plugins/**'
+      - 'assets_inject/**'
+      - 'hooks/**'
       - 'config.json'
       - '.github/workflows/build-apk.yml'
+      - '.github/scripts/**'
   workflow_dispatch:
 
 jobs:
@@ -16,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ════════════════ 1) التجهيز ════════════════
       - name: 📥 جلب الكود
         uses: actions/checkout@v4
 
@@ -38,28 +47,25 @@ jobs:
       - name: ⚙️ قراءة config.json
         id: config
         run: |
+          if ! jq empty config.json 2>/dev/null; then
+            echo "❌ config.json فيه خطأ في الصيغة (فاصلة ناقصة أو علامة تنصيص؟)"
+            exit 1
+          fi
           APP_NAME=$(jq -r '.appName // "Web App"' config.json)
           APP_ID=$(jq -r '.appId // "com.dark.webapp"' config.json)
           VERSION=$(jq -r '.version // "1.0.0"' config.json)
-          SPLASH_ENABLED=$(jq -r '.splash.enabled // true' config.json)
-          SPLASH_DURATION=$(jq -r '.splash.duration // 2500' config.json)
-          SPLASH_COLOR=$(jq -r '.splash.backgroundColor // "#0f0f1a"' config.json)
-          SPLASH_TEXT=$(jq -r '.splash.textColor // "#a29bfe"' config.json)
-          SPLASH_FOOTER=$(jq -r '.splash.footer // ""' config.json)
-          SPLASH_LOGO=$(jq -r '.splash.logoFile // "logo.png"' config.json)
-          ENV_ENABLED=$(jq -r '.env.enabled // false' config.json)
-          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
-          echo "app_id=$APP_ID" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "splash_enabled=$SPLASH_ENABLED" >> $GITHUB_OUTPUT
-          echo "splash_duration=$SPLASH_DURATION" >> $GITHUB_OUTPUT
-          echo "splash_color=$SPLASH_COLOR" >> $GITHUB_OUTPUT
-          echo "splash_text=$SPLASH_TEXT" >> $GITHUB_OUTPUT
-          echo "splash_footer=$SPLASH_FOOTER" >> $GITHUB_OUTPUT
-          echo "splash_logo=$SPLASH_LOGO" >> $GITHUB_OUTPUT
-          echo "env_enabled=$ENV_ENABLED" >> $GITHUB_OUTPUT
-          echo "📱 $APP_NAME | 🆔 $APP_ID | 🏷️ v$VERSION"
+          CAP_VERSION=$(jq -r '.capacitorVersion // "latest"' config.json)
+          SPLASH_ENABLED=$(jq -r '.splash.enabled | if . == null then true else . end' config.json)
+          ENV_ENABLED=$(jq -r '.env.enabled | if . == null then false else . end' config.json)
+          printf 'app_name=%s\n' "$APP_NAME" >> "$GITHUB_OUTPUT"
+          printf 'app_id=%s\n' "$APP_ID" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+          printf 'cap_version=%s\n' "$CAP_VERSION" >> "$GITHUB_OUTPUT"
+          printf 'splash_enabled=%s\n' "$SPLASH_ENABLED" >> "$GITHUB_OUTPUT"
+          printf 'env_enabled=%s\n' "$ENV_ENABLED" >> "$GITHUB_OUTPUT"
+          echo "📱 $APP_NAME | 🆔 $APP_ID | 🏷️ v$VERSION | 📦 Capacitor: $CAP_VERSION"
 
+      # ════════════════ 2) تطبيق الويب ════════════════
       - name: 🔍 البحث عن ملف ZIP
         id: find_zip
         run: |
@@ -69,15 +75,17 @@ jobs:
             exit 1
           fi
           echo "✅ تم العثور على: $ZIP_FILE"
-          echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
+          printf 'zip_file=%s\n' "$ZIP_FILE" >> "$GITHUB_OUTPUT"
 
       - name: 📦 فك ضغط التطبيق
         id: extract
+        env:
+          ZIP_FILE: ${{ steps.find_zip.outputs.zip_file }}
         run: |
           mkdir -p workspace
-          unzip -q "${{ steps.find_zip.outputs.zip_file }}" -d workspace/extracted
+          unzip -q "$ZIP_FILE" -d workspace/extracted
           PROJECT_ROOT="workspace/extracted"
-          if [ $(ls workspace/extracted | wc -l) -eq 1 ]; then
+          if [ "$(ls workspace/extracted | wc -l)" -eq 1 ]; then
             INNER=$(ls workspace/extracted)
             if [ -d "workspace/extracted/$INNER" ]; then
               if [ -f "workspace/extracted/$INNER/index.html" ] || [ -f "workspace/extracted/$INNER/package.json" ]; then
@@ -85,17 +93,20 @@ jobs:
               fi
             fi
           fi
-          echo "project_root=$PROJECT_ROOT" >> $GITHUB_OUTPUT
+          printf 'project_root=%s\n' "$PROJECT_ROOT" >> "$GITHUB_OUTPUT"
           echo "✅ جذر المشروع: $PROJECT_ROOT"
 
       - name: 🔬 تحديد نوع المشروع
         id: detect
+        env:
+          PROJECT_ROOT: ${{ steps.extract.outputs.project_root }}
         run: |
-          ROOT="${{ steps.extract.outputs.project_root }}"
-          if [ -f "$ROOT/package.json" ]; then
-            echo "type=node" >> $GITHUB_OUTPUT
+          if [ -f "$PROJECT_ROOT/package.json" ]; then
+            echo "type=node" >> "$GITHUB_OUTPUT"
+            echo "🔬 مشروع Node"
           else
-            echo "type=static" >> $GITHUB_OUTPUT
+            echo "type=static" >> "$GITHUB_OUTPUT"
+            echo "🔬 مشروع ثابت (HTML/CSS/JS)"
           fi
 
       - name: 🏗️ بناء تطبيق الويب
@@ -106,23 +117,25 @@ jobs:
           if grep -q '"build"' package.json; then npm run build; fi
 
       - name: 📁 تجهيز مجلد www
+        id: www
+        env:
+          PROJECT_ROOT: ${{ steps.extract.outputs.project_root }}
+          PROJECT_TYPE: ${{ steps.detect.outputs.type }}
         run: |
-          ROOT="${{ steps.extract.outputs.project_root }}"
-          TYPE="${{ steps.detect.outputs.type }}"
           mkdir -p www
           CANDIDATES=("dist" "build" "out" "public" ".output/public" ".next/out" "www")
-          if [ "$TYPE" = "node" ]; then
+          if [ "$PROJECT_TYPE" = "node" ]; then
             FOUND=0
             for dir in "${CANDIDATES[@]}"; do
-              if [ -f "$ROOT/$dir/index.html" ]; then
-                cp -r "$ROOT/$dir"/* www/
+              if [ -f "$PROJECT_ROOT/$dir/index.html" ]; then
+                cp -r "$PROJECT_ROOT/$dir"/* www/
                 FOUND=1
                 break
               fi
             done
-            if [ "$FOUND" -eq 0 ]; then cp -r "$ROOT"/* www/ 2>/dev/null || true; fi
+            if [ "$FOUND" -eq 0 ]; then cp -r "$PROJECT_ROOT"/* www/ 2>/dev/null || true; fi
           else
-            cp -r "$ROOT"/* www/
+            cp -r "$PROJECT_ROOT"/* www/
           fi
           if [ ! -f "www/index.html" ]; then
             echo "❌ index.html غير موجود!"
@@ -130,88 +143,244 @@ jobs:
           fi
           echo "✅ مجلد www جاهز"
 
-      # ===== حقن env.js من config.json =====
-      - name: 🔐 حقن متغيرات البيئة
+      # ════════════════ 3) حقن env و splash ════════════════
+      - name: 🔐 تجهيز متغيرات البيئة (env.js)
+        id: env_js
         if: steps.config.outputs.env_enabled == 'true'
         run: |
-          echo "🔐 تجهيز env.js..."
-
-          # استخراج المفاتيح والقيم من config.json
-          # المتوقع: { "env": { "enabled": true, "vars": { "KEY": "value" } } }
-
-          jq -r '
-            .env.vars // {} |
-            to_entries |
-            map("  " + .key + ": \"" + (.value | tostring | gsub("\\\\"; "\\\\\\\\") | gsub("\""; "\\\\\"")) + "\"") |
-            "window.ENV = {\n" + join(",\n") + "\n};"
-          ' config.json > www/env.js
-
-          # التحقق
-          if [ ! -s www/env.js ]; then
-            echo "⚠️ env.js فاضي، نضع قيمة افتراضية"
-            echo "window.ENV = {};" > www/env.js
-          fi
-
-          # حقن env.js في index.html قبل splash.js (أو قبل </head>)
-          if grep -q 'splash.js' www/index.html; then
-            sed -i 's|<script src="splash.js"></script>|<script src="env.js"></script><script src="splash.js"></script>|' www/index.html
-          else
-            sed -i 's|</head>|<script src="env.js"></script></head>|' www/index.html
-          fi
-
+          # jq يهرّب القيم بشكل صحيح (tojson)، كل القيم تصير نصوصاً
+          jq -r '"window.ENV = " + ((.env.vars // {}) | with_entries(.value |= tostring) | tojson) + ";"' config.json > www/env.js
           echo "✅ env.js:"
           cat www/env.js
 
-      # ===== حقن شاشة البداية =====
-      - name: 🎬 حقن شاشة البداية
+      - name: 🎬 تجهيز شاشة البداية
+        id: splash
         if: steps.config.outputs.splash_enabled == 'true'
         run: |
+          jq '{
+            appName: (.appName // "App"),
+            subtitle: (.splash.subtitle // ""),
+            footer: (.splash.footer // ""),
+            duration: (.splash.duration // 2500),
+            bg: (.splash.backgroundColor // "#0f0f1a"),
+            text: (.splash.textColor // "#a29bfe"),
+            accent: (.splash.accentColor // "#6c5ce7"),
+            logo: "splash-logo.png"
+          }' config.json | { printf 'window.__SPLASH__='; cat; printf ';\n'; } > www/splash-config.js
           cp splash/splash.js www/splash.js
-          if [ -f "splash/${{ steps.config.outputs.splash_logo }}" ]; then
-            cp "splash/${{ steps.config.outputs.splash_logo }}" www/splash-logo.png
+          LOGO=$(jq -r '.splash.logoFile // "logo.png"' config.json)
+          if [ -f "splash/$LOGO" ]; then
+            cp "splash/$LOGO" www/splash-logo.png
+            echo "🖼️ الشعار: splash/$LOGO"
+          else
+            echo "ℹ️ لا يوجد شعار (splash/$LOGO) — سيظهر حرف الاسم بدله"
           fi
-          sed -i "s|appName: \"تطبيقي\"|appName: \"${{ steps.config.outputs.app_name }}\"|" www/splash.js
-          sed -i "s|footer: \"\"|footer: \"${{ steps.config.outputs.splash_footer }}\"|" www/splash.js
-          sed -i "s|duration: 2000|duration: ${{ steps.config.outputs.splash_duration }}|" www/splash.js
-          sed -i "s|bgColor: \"#0f0f1a\"|bgColor: \"${{ steps.config.outputs.splash_color }}\"|" www/splash.js
-          sed -i "s|textColor: \"#a29bfe\"|textColor: \"${{ steps.config.outputs.splash_text }}\"|" www/splash.js
-          sed -i 's|</body>|<script src="splash.js"></script></body>|' www/index.html
-          echo "✅ تم حقن شاشة البداية"
+          echo "✅ ملفات السبلاش جاهزة"
 
+      - name: 💉 حقن السكربتات في index.html
+        id: inject
+        run: python3 .github/scripts/native.py inject
+
+      # ════════════════ 4) Capacitor + أندرويد ════════════════
       - name: 📦 تثبيت Capacitor
+        id: cap_install
+        env:
+          CAP_VERSION: ${{ steps.config.outputs.cap_version }}
         run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm install "@capacitor/core@$CAP_VERSION" "@capacitor/cli@$CAP_VERSION" "@capacitor/android@$CAP_VERSION"
 
       - name: 🚀 تهيئة Capacitor
+        id: cap_init
+        env:
+          APP_NAME: ${{ steps.config.outputs.app_name }}
+          APP_ID: ${{ steps.config.outputs.app_id }}
         run: |
-          npx cap init "${{ steps.config.outputs.app_name }}" "${{ steps.config.outputs.app_id }}" --web-dir=www
+          npx cap init "$APP_NAME" "$APP_ID" --web-dir=www
 
       - name: 🤖 إضافة منصة أندرويد
+        id: cap_add
         run: npx cap add android
 
       - name: 🔧 إصلاح تعارض Kotlin
-        run: |
-          printf '\n\n// ===== إصلاح تعارض Kotlin =====\nallprojects {\n    configurations.all {\n        resolutionStrategy {\n            force "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"\n            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24"\n            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24"\n        }\n    }\n}\n' >> android/build.gradle
-          echo "✅ تم إضافة إصلاح Kotlin"
-          tail -15 android/build.gradle
+        id: kotlin_fix
+        run: python3 .github/scripts/native.py kotlinfix
 
-      - name: 🎨 تكوين شاشة البداية الأصلية
+      - name: 🎨 تكوين الثيم الأصلي (إنهاء الوميض الأبيض)
+        id: theme
         run: |
-          printf '{\n  "appId": "%s",\n  "appName": "%s",\n  "webDir": "www",\n  "plugins": {\n    "SplashScreen": {\n      "launchShowDuration": 0,\n      "launchAutoHide": true,\n      "backgroundColor": "%s",\n      "androidSplashResourceName": "splash",\n      "androidScaleType": "CENTER_CROP",\n      "showSpinner": false,\n      "splashFullScreen": true,\n      "splashImmersive": true\n    }\n  }\n}\n' "${{ steps.config.outputs.app_id }}" "${{ steps.config.outputs.app_name }}" "${{ steps.config.outputs.splash_color }}" > capacitor.config.json
-          cat capacitor.config.json
+          # لون خلفية الـWebView من config.json
+          jq '{
+            appId: (.appId // "com.dark.webapp"),
+            appName: (.appName // "Web App"),
+            webDir: "www",
+            backgroundColor: (.splash.backgroundColor // "#0f0f1a"),
+            android: { backgroundColor: (.splash.backgroundColor // "#0f0f1a") }
+          }' config.json > capacitor.config.json
+          python3 .github/scripts/native.py theme
 
+      - name: 🏷️ تطبيق رقم الإصدار على الـAPK
+        id: version
+        run: python3 .github/scripts/native.py version
+
+      # ════════════════ 5) Native (كلها اختيارية) ════════════════
+      - name: 🔎 [تشخيص] native قبل التطبيق
+        run: python3 .github/scripts/native.py diag
+
+      - name: 🧩 تطبيق ملفات Native
+        id: native_files
+        run: python3 .github/scripts/native.py files
+
+      - name: 🔎 [تشخيص] native بعد التطبيق (يفشل إذا لم تصل الملفات)
+        run: python3 .github/scripts/native.py diagcheck
+
+      - name: 🔐 إضافة الأذونات
+        id: native_perms
+        run: python3 .github/scripts/native.py permissions
+
+      - name: 📚 إضافة مكتبات Native
+        id: native_deps
+        run: python3 .github/scripts/native.py deps
+
+      - name: 🟣 تفعيل Kotlin
+        id: native_kotlin
+        run: python3 .github/scripts/native.py kotlin
+
+      - name: 🎨 تفعيل Jetpack Compose
+        id: native_compose
+        run: python3 .github/scripts/native.py compose
+
+      - name: 🔌 تثبيت Capacitor Plugins
+        id: plugins
+        run: python3 .github/scripts/native.py plugins
+
+      - name: 🔍 فحص أولي لملفات Kotlin
+        id: validate
+        run: python3 .github/scripts/native.py validate
+
+      - name: 🪝 pre-build hook
+        id: pre_hook
+        env:
+          APP_NAME: ${{ steps.config.outputs.app_name }}
+          APP_ID: ${{ steps.config.outputs.app_id }}
+          VERSION: ${{ steps.config.outputs.version }}
+        run: |
+          if [ -f hooks/pre-build.sh ]; then
+            echo "🪝 تشغيل hooks/pre-build.sh"
+            bash hooks/pre-build.sh
+          else
+            echo "⏭️ لا يوجد hooks/pre-build.sh — تخطي"
+          fi
+
+      # ════════════════ 6) المزامنة والبناء ════════════════
       - name: 🔄 مزامنة الملفات
+        id: sync
         run: npx cap sync android
 
+      - name: 🔎 [تشخيص] native بعد cap sync (يفشل إذا اختفت الملفات)
+        run: python3 .github/scripts/native.py diagcheck
+
+      - name: 🗂️ حقن assets_inject
+        id: assets
+        run: python3 .github/scripts/native.py assets
+
       - name: 🔨 بناء APK
+        id: gradle
         working-directory: ./android
         run: |
+          set -o pipefail
+          mkdir -p ../build_logs
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace 2>&1 | tee ../build_logs/gradle.log
+
+      - name: 🪝 post-build hook
+        id: post_hook
+        env:
+          APP_NAME: ${{ steps.config.outputs.app_name }}
+          APP_ID: ${{ steps.config.outputs.app_id }}
+          VERSION: ${{ steps.config.outputs.version }}
+          APK_PATH: android/app/build/outputs/apk/debug/app-debug.apk
+        run: |
+          if [ -f hooks/post-build.sh ]; then
+            echo "🪝 تشغيل hooks/post-build.sh"
+            bash hooks/post-build.sh
+          else
+            echo "⏭️ لا يوجد hooks/post-build.sh — تخطي"
+          fi
+
+      # ════════════════ 7) المخرجات ════════════════
+      - name: 📝 إنشاء BUILD_INFO.md
+        id: info
+        run: python3 .github/scripts/native.py info
+
+      - name: 📦 تجهيز ملفات التسليم
+        id: dist
+        env:
+          APP_NAME: ${{ steps.config.outputs.app_name }}
+          VERSION: ${{ steps.config.outputs.version }}
+        run: |
+          SAFE=$(printf '%s' "$APP_NAME" | tr -c 'A-Za-z0-9._-' '_' | sed 's/^_*$//')
+          if [ -z "$SAFE" ]; then SAFE=app; fi
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/$SAFE-v$VERSION.apk"
+          cp BUILD_INFO.md dist/BUILD_INFO.md
+          printf 'artifact_name=%s\n' "$SAFE-v$VERSION" >> "$GITHUB_OUTPUT"
+          cat BUILD_INFO.md >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ الملفات الجاهزة:"
+          ls -l dist
 
       - name: 📤 رفع APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.config.outputs.app_name }}-v${{ steps.config.outputs.version }}
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: ${{ steps.dist.outputs.artifact_name }}
+          path: dist/
           retention-days: 30
+
+      # ════════════════ 8) عند الفشل ════════════════
+      - name: ❌ ملخص الفشل
+        if: failure()
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          FAILED=$(printf '%s' "$STEPS_JSON" | jq -r 'to_entries | map(select(.value.outcome == "failure")) | .[0].key // "unknown"')
+          case "$FAILED" in
+            config) HINT="config.json فيه خطأ في الصيغة" ;;
+            find_zip) HINT="ضع ملف ZIP للتطبيق في مجلد webapp/" ;;
+            extract) HINT="ملف ZIP تالف أو غير صالح" ;;
+            www) HINT="index.html غير موجود داخل التطبيق" ;;
+            inject) HINT="تعذر حقن السكربتات في www/index.html" ;;
+            cap_install) HINT="تحقق من capacitorVersion في config.json" ;;
+            native_files) HINT="ملفات native/ فيها مشكلة (راجع رسالة ❌ في اللوق)" ;;
+            native_perms) HINT="صيغة الأذونات في config.json" ;;
+            native_deps) HINT="صيغة extraDependencies في config.json" ;;
+            native_kotlin) HINT="تعذر دمج إعدادات Kotlin في gradle" ;;
+            native_compose) HINT="تعذر دمج إعدادات Compose في gradle" ;;
+            plugins) HINT="بلاجن في plugins/ غير صالح (راجع package.json)" ;;
+            gradle) HINT="فشل بناء Gradle (غالباً خطأ في كود Kotlin أو مكتبة)" ;;
+            *) HINT="راجع لوق الخطوة الفاشلة" ;;
+          esac
+          {
+            echo "## ❌ فشل البناء"
+            echo
+            echo "**الخطوة:** \`$FAILED\`"
+            echo
+            echo "**السبب المحتمل:** $HINT"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -f build_logs/gradle.log ]; then
+            {
+              echo
+              echo "**أهم أسطر الخطأ من Gradle:**"
+              echo '```'
+              grep -E '^e: |error:|What went wrong|Execution failed|Could not |not found' build_logs/gradle.log | head -20
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "::error title=فشل البناء::الخطوة ($FAILED) — $HINT"
+
+      - name: 📎 رفع سجلات الفشل
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build_logs/
+          if-no-files-found: ignore
+          retention-days: 7
