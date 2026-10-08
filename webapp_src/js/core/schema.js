@@ -11,6 +11,10 @@ export const WAVE_STYLES = ['line', 'bars', 'mirrored'];
 export const WAVE_POSITIONS = ['top', 'center', 'bottom', 'custom'];
 export const WAVE_COLOR_MODES = ['manual', 'adaptive'];
 export const REACT_SOURCES = ['volume', 'bass', 'mid', 'treble'];
+// Effect Engine settings (Phase 5). The maths lives in Kotlin (effects/EffectEngine.kt); these are only its inputs.
+// Wire names must match effects/EffectSettings.kt.
+export const EFFECT_PRESETS = ['none', 'subtle', 'pulse', 'beat', 'cinematic'];
+export const MOTION_MODES = ['static', 'slowZoom', 'float', 'pulseZoom', 'cinematicDrift'];
 
 export function defaults() {
   return {
@@ -43,6 +47,11 @@ export function defaults() {
       zoom: 1.05,
       pan: true,
     },
+    // Inputs of the native Effect Engine. Additive: later effects add keys here (never rename existing ones).
+    //   preset     how the picture reacts to the audio; motion: the background's camera path (independent of preset)
+    //   intensity  0..2 amount of every reaction;  smoothing  0..1 (0 snappy, 1 very smooth);  seed  shake pattern id
+    // (backgroundMotion above is the Phase 1 placeholder and is not used by the engine.)
+    effects: { preset: 'pulse', motion: 'slowZoom', intensity: 1, smoothing: 0.5, seed: 1 },
     // Where the user left off (ms). Restored paused when the project is reopened.
     playhead: { positionMs: 0 },
     // Reserved so future engines can store settings without a schema bump.
@@ -123,6 +132,11 @@ export function normalizeProject(raw) {
   p.wave.customY = clamp(Number(p.wave.customY), 0, 1, d.wave.customY);
   p.wave.height = clamp(Number(p.wave.height), 0.05, 0.5, d.wave.height);
   p.backgroundMotion.zoom = clamp(Number(p.backgroundMotion.zoom), 1, 1.3, d.backgroundMotion.zoom);
+  p.effects.preset = pick(p.effects.preset, EFFECT_PRESETS, d.effects.preset);
+  p.effects.motion = pick(p.effects.motion, MOTION_MODES, d.effects.motion);
+  p.effects.intensity = clamp(Number(p.effects.intensity), 0, 2, d.effects.intensity);
+  p.effects.smoothing = clamp(Number(p.effects.smoothing), 0, 1, d.effects.smoothing);
+  p.effects.seed = Number.isInteger(p.effects.seed) ? Math.max(0, Math.min(1000000, p.effects.seed)) : d.effects.seed;
   p.media.audio = sanitizeAudio(p.media.audio);
   p.media.background = sanitizeBackground(p.media.background);
   p.playhead.positionMs = nonNeg(p.playhead.positionMs);

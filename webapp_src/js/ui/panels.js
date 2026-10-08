@@ -1,11 +1,12 @@
-// Bottom panels (Media / Wave / Settings) and the three timeline lanes.
+// Bottom panels (Media / Wave / FX / Settings) and the three timeline lanes.
 import { h, clear, $, toast, formatTime } from './dom.js';
 import { state, mutate } from './state.js';
-import { WAVE_STYLES, outputSize } from '../core/schema.js';
+import { WAVE_STYLES, EFFECT_PRESETS, MOTION_MODES, outputSize } from '../core/schema.js';
 import { bridge } from '../core/bridge.js';
 import { pick, remove } from './media.js';
 import { waveLabel, waveSummary, mountWave, reanalyze } from './analysis.js';
 import { MSG } from './messages.js';
+import { fxReset, fxLastText, fxRepaint } from './effects.js';
 
 const LABELS = { line: 'Line', bars: 'Bars', mirrored: 'Mirrored', bottom: 'Bottom', custom: 'Custom', manual: 'Manual', adaptive: 'Adaptive' };
 
@@ -44,9 +45,9 @@ function waveLane(l) {
   if (w.status === 'ready') mountWave(bar);
   else {
     const analyzing = w.status === 'analyzing';
-    bar.append(
-      analyzing ? h('div', { class: 'fill progress', id: 'wave-progress', style: { background: l.color, width: Math.round(w.progress * 100) + '%' } }) : null,
-      h('div', { class: 'name wave-label', dir: 'auto' }, waveLabel()));
+    // (Node.append(null) would print the text "null": only append what exists)
+    if (analyzing) bar.append(h('div', { class: 'fill progress', id: 'wave-progress', style: { background: l.color, width: Math.round(w.progress * 100) + '%' } }));
+    bar.append(h('div', { class: 'name wave-label', dir: 'auto' }, waveLabel()));
   }
   return h('div', { class: 'lane' }, h('div', { class: 'lane-title' }, l.title), bar);
 }
@@ -119,6 +120,40 @@ function wavePanel() {
       h('button', { type: 'button', class: !w.reactive ? 'on' : '', onclick: () => set({ reactive: false }) }, 'Off'))));
 }
 
+const PRESET_LABELS = { none: 'None', subtle: 'Subtle', pulse: 'Pulse', beat: 'Beat', cinematic: 'Cinematic' };
+const MOTION_LABELS = { static: 'Static', slowZoom: 'Slow zoom', float: 'Float', pulseZoom: 'Pulse zoom', cinematicDrift: 'Cinematic drift' };
+
+function select(options, labels, current, onPick) {
+  return h('select', { onchange: (e) => onPick(e.target.value) },
+    options.map((o) => h('option', { value: o, selected: o === current }, labels[o] || o)));
+}
+
+function readRow(label, key) {
+  return h('div', { class: 'row fx-row' }, h('span', { class: 'label' }, label), h('span', { class: 'value', 'data-fx': key }, '—'));
+}
+
+function meterRow(label, key) {
+  return h('div', { class: 'row fx-row' }, h('span', { class: 'label' }, label),
+    h('div', { class: 'meter' }, h('i', { 'data-meter': key })));
+}
+
+// FX tab: the inputs of the native Effect Engine + a live readout of what it returns at the playhead.
+function fxPanel() {
+  const e = state.project.effects;
+  const set = (patch) => { mutate((p) => Object.assign(p.effects, patch)); fxReset(); };
+  const root = h('div', {},
+    row('Preset', select(EFFECT_PRESETS, PRESET_LABELS, e.preset, (v) => set({ preset: v }))),
+    row('Background motion', select(MOTION_MODES, MOTION_LABELS, e.motion, (v) => set({ motion: v }))),
+    row('Intensity', h('input', { type: 'range', min: 0, max: 200, value: Math.round(e.intensity * 100), onchange: (ev) => set({ intensity: Number(ev.target.value) / 100 }) })),
+    row('Smoothing', h('input', { type: 'range', min: 0, max: 100, value: Math.round(e.smoothing * 100), onchange: (ev) => set({ smoothing: Number(ev.target.value) / 100 }) })),
+    h('div', { class: 'hint', 'data-fx': 'status', dir: 'auto' }, bridge.isNative() ? fxLastText() : 'Effect values come from the native engine (app only)'),
+    readRow('Scale', 'scale'), readRow('Rotation', 'rotationDeg'), readRow('Translate X', 'translateX'),
+    readRow('Translate Y', 'translateY'), readRow('Opacity', 'opacity'),
+    meterRow('Amplitude', 'amplitude'), meterRow('Bass', 'bass'), meterRow('Mid', 'mid'), meterRow('Treble', 'treble'),
+    meterRow('Glow', 'glow'), meterRow('Intensity', 'intensity'), meterRow('Shake', 'shake'));
+  return root;
+}
+
 function settingsPanel() {
   const p = state.project;
   const size = outputSize(p.aspectRatio, p.resolution);
@@ -158,8 +193,9 @@ async function runPing() {
 export function renderPanel() {
   const root = $('#panel');
   clear(root);
-  const view = { media: mediaPanel, wave: wavePanel, settings: settingsPanel }[state.tab] || mediaPanel;
+  const view = { media: mediaPanel, wave: wavePanel, fx: fxPanel, settings: settingsPanel }[state.tab] || mediaPanel;
   root.append(view());
+  if (state.tab === 'fx') fxRepaint();
 }
 
 export function renderTabs() {

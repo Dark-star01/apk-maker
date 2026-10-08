@@ -13,6 +13,10 @@ import __APP_ID__.analysis.AudioAnalyzer
 import __APP_ID__.analysis.WaveCache
 import __APP_ID__.analysis.WaveData
 import __APP_ID__.audio.AudioEngine
+import __APP_ID__.effects.EffectEngine
+import __APP_ID__.effects.EffectSettings
+import __APP_ID__.effects.MotionMode
+import __APP_ID__.effects.Preset
 import __APP_ID__.media.MediaException
 import __APP_ID__.media.MediaManager
 import com.getcapacitor.JSObject
@@ -123,6 +127,7 @@ class MvmBridgePlugin : Plugin() {
                 out.put("kind", kind)
                 if (kind == KIND_AUDIO) {
                     analysisGen.incrementAndGet() // the old audio is about to be replaced: stop analysing it
+                    dropEffectWave()
                     val r = media.importAudio(uri, projectId)
                     val m = JSObject()
                     m.put("file", r.file)
@@ -196,7 +201,7 @@ class MvmBridgePlugin : Plugin() {
                 ?: throw MediaException(MediaException.BAD_REQUEST, "projectId is required")
             val kind = call.getString("kind")
             if (kind != KIND_AUDIO && kind != KIND_IMAGE) throw MediaException(MediaException.BAD_REQUEST, "bad kind")
-            if (kind == KIND_AUDIO) analysisGen.incrementAndGet()
+            if (kind == KIND_AUDIO) { analysisGen.incrementAndGet(); dropEffectWave() }
             media.removeMedia(projectId, kind)
             call.resolve()
         } catch (t: Throwable) {
@@ -210,6 +215,7 @@ class MvmBridgePlugin : Plugin() {
         try {
             val projectId = call.getString("projectId")
                 ?: throw MediaException(MediaException.BAD_REQUEST, "projectId is required")
+            dropEffectWave()
             media.deleteProject(projectId)
             call.resolve()
         } catch (t: Throwable) {
@@ -343,6 +349,7 @@ class MvmBridgePlugin : Plugin() {
                 } catch (e: java.io.IOException) {
                     throw MediaException(MediaException.STORAGE_FAILED, "Cannot store the analysis", e)
                 }
+                dropEffectWave() // new analysis: the effect engine must reload it
                 call.resolve(waveSummary(data, false))
             } catch (t: Throwable) {
                 fail(call, t)
@@ -384,6 +391,80 @@ class MvmBridgePlugin : Plugin() {
         o.put("count", d.count)
         o.put("durationMs", d.durationMs)
         return o
+    }
+
+    // ── Effects (Phase 5) ───────────────────────────────────────────────────
+    // The effect maths lives in effects/EffectEngine (pure Kotlin). This is only a thin door for the web UI's
+    // diagnostics panel; the future native renderer calls EffectEngine directly, with no bridge in between.
+    private val effectLock = Any()
+    private var effWaveKey: String? = null      // projectId|file the loaded wave belongs to
+    private var effWave: WaveData? = null
+    private var effEngine: EffectEngine? = null
+    private var effEngineSig: String? = null
+
+    private fun dropEffectWave() = synchronized(effectLock) { effWaveKey = null; effWave = null; effEngine = null; effEngineSig = null }
+
+    // JS: await ...getEffectState({ projectId, file?, timeMs, durationMs?, effects: {preset, motion, intensity, smoothing, seed}, aspect? })
+    // Resolves the EffectState (see effects/EffectState.kt). Reads the wave cache at most once per audio file
+    // (never analyses, never touches the audio file); a missing wave simply gives the neutral, non-reactive state.
+    @PluginMethod
+    fun getEffectState(call: PluginCall) {
+        try {
+            val projectId = call.getString("projectId")
+                ?: throw MediaException(MediaException.BAD_REQUEST, "projectId is required")
+            val timeMs = call.getDouble("timeMs") ?: 0.0
+            val durationMs = call.getDouble("durationMs")?.toLong() ?: 0L
+            val file = call.getString("file")
+            val fx = call.getObject("effects")
+            val settings = EffectSettings(
+                Preset.fromWire(fx?.optString("preset")),
+                MotionMode.fromWire(fx?.optString("motion")),
+                fx?.optDouble("intensity", 1.0) ?: 1.0,
+                fx?.optDouble("smoothing", 0.5) ?: 0.5,
+                fx?.optInt("seed", 1) ?: 1,
+                call.getDouble("aspect") ?: (16.0 / 9.0),
+            )
+            val st = synchronized(effectLock) {
+                val key = if (file.isNullOrBlank()) null else "$projectId|$file"
+                if (key != effWaveKey || (effWave == null && key != null)) {
+                    if (key != effWaveKey) { effEngine = null; effEngineSig = null }
+                    effWaveKey = key
+                    effWave = null
+                    if (key != null) {
+                        val f = media.resolve(projectId, file!!)
+                        val cache = media.analysisFile(projectId)
+                        // stat only until a cache exists: no audio-file I/O on every call while analysis is pending
+                        if (f != null && cache.isFile) effWave = WaveCache.read(cache, WaveCache.fingerprint(f))
+                    }
+                }
+                val sig = settings.signature() + "|" + durationMs + "|" + (effWave != null)
+                if (effEngine == null || effEngineSig != sig) {
+                    effEngine = EffectEngine(settings, effWave, durationMs)
+                    effEngineSig = sig
+                }
+                effEngine!!.getEffectState(timeMs)
+            }
+            val o = JSObject()
+            o.put("timeMs", st.timeMs)
+            o.put("scale", st.scale)
+            o.put("rotationDeg", st.rotationDeg)
+            o.put("translateX", st.translateX)
+            o.put("translateY", st.translateY)
+            o.put("opacity", st.opacity)
+            o.put("glow", st.glow)
+            o.put("intensity", st.intensity)
+            o.put("shake", st.shake)
+            o.put("audioReactive", st.audioReactive)
+            val a = JSObject()
+            a.put("amplitude", st.audio.amplitude)
+            a.put("bass", st.audio.bass)
+            a.put("mid", st.audio.mid)
+            a.put("treble", st.audio.treble)
+            o.put("audio", a)
+            call.resolve(o)
+        } catch (t: Throwable) {
+            fail(call, t)
+        }
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

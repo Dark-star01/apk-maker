@@ -7,6 +7,7 @@ import { state, emit, scheduleSave, flushSave, freshPlay } from './state.js';
 import { bridge } from '../core/bridge.js';
 import { MSG, errorMessage } from './messages.js';
 import { renderStateAt, audioKey } from '../core/timeline.js';
+import { fxTick } from './effects.js';
 
 const FRAME_MS = 50;        // max UI redraw rate while playing
 const SEEK_THROTTLE_MS = 120; // max native seeks per second while scrubbing
@@ -217,7 +218,8 @@ export function draw(force) {
   setText('#time-total', tot);
   setText('#ruler-end', tot);
   setText('#ruler-mid', formatTime(dur / 2));
-  const rs = renderStateAt(state.project, pos, { durationMs: dur, playing: pl.status === 'playing', waveData: state.wave.data });
+  const rs = renderStateAt(state.project, pos, { durationMs: dur, playing: pl.status === 'playing', waveData: state.wave.data, effectState: state.fx.values });
+  fxTick(pos, dur, false);
   setText('#preview-time', formatTime(rs.timeMs) + ' / ' + tot);
 
   const playing = pl.status === 'playing';

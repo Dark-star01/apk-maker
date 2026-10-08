@@ -129,6 +129,13 @@ export const bridge = {
     try { return p.addListener('analysisProgress', cb); } catch (e) { return null; }
   },
 
+  // ── Effects (Kotlin EffectEngine; JS never computes effect values) ──
+  // Resolves the EffectState for one instant: { timeMs, scale, rotationDeg, translateX, translateY, opacity, glow,
+  // intensity, shake, audioReactive, audio: { amplitude, bass, mid, treble } }. Never analyses audio or reads it.
+  getEffectState({ projectId, file, timeMs, durationMs, effects, aspect }) {
+    return call('getEffectState', { projectId, file: file || null, timeMs, durationMs: durationMs || 0, effects, aspect });
+  },
+
   async removeMedia(projectId, kind) {
     if (!plugin()) return;
     await call('removeMedia', { projectId, kind });

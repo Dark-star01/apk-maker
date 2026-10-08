@@ -89,6 +89,24 @@ JS never analyses audio.
 - **Cache:** `projects/<id>/analysis.bin` = header (version, rate, count, duration, audio fingerprint) + bytes. Fingerprint = size + modified time + CRC of the first and last 64 KB of the audio (never the whole file). It is only used if the fingerprint matches the CURRENT audio file; importing/removing audio also deletes it; a cache written for a file that changed during analysis is never stored. JS identity of the audio also includes `rev` (import time) so a replaced file with equal size/duration is still detected.
 - **Threads:** analysis runs on its own background-priority thread; playback and UI are untouched. A newer request, a replace or a remove cancels the running analysis.
 
+## Phase 5 decisions (Effect Engine)
+
+Pipeline: `wave.data -> EffectEngine (Kotlin, pure) -> EffectState -> RenderState.effects -> Renderer (Phase 6, Preview AND Export)`.
+There is exactly ONE place that computes effect values: `effects/EffectEngine.kt`. JS never computes them; the FX tab only asks native for the state at the playhead (`getEffectState`) and prints it.
+
+- **Files (`effects/`):** `EffectEngine` (public API `getEffectState(timeMs)`), `EffectSettings` (+ `Preset`, `MotionMode`), `EffectState` (+ `AudioLevels`), `AudioEnvelope` (normalize + smooth + interpolate), `BackgroundMotion`, `DeterministicNoise`, `Presets`. No Android classes, no I/O, no DOM: runs on a plain JVM (that is how it is unit-tested).
+- **Deterministic and stateless:** the result depends only on (settings, wave data, time). No `random`, no clock, no previous frame. Any time in any order gives the same bits (tested forwards/backwards/fresh instance). Times are `Double` ms (export frames are at n*1000/30 ms) and are clamped to [0, duration].
+- **Pipeline per series:** raw byte (0..255) -> *normalization* (track's 15th percentile = 0, 97th = 1, minimum span 0.15 so a flat track is not stretched, silence stays 0) -> *smoothing* (envelope follower, attack/release in seconds per preset, scaled 0.5x..2x by `smoothing`; run ONCE over the 30/s table when the engine is built, so it is stateless at query time) -> *linear interpolation* between the two surrounding points -> mapping.
+- **Mapping (at intensity 1):** bass -> scale (+2/6/10/3.5 % for subtle/pulse/beat/cinematic); mid -> sway (translate) and small rotation; amplitude -> opacity (1 - depth .. 1) and `intensity`; treble -> glow; beat only: bass hits above ~0.55 add shake. `settings.intensity` (0..2) multiplies every amount. Preset `none` = neutral state (levels still reported).
+- **Background motion (independent of preset, time only):** `static`, `slowZoom` (1 -> 1.08 over the song, or over 60 s if the length is unknown), `float`, `pulseZoom` (the only audio driven one: +5 % x bass), `cinematicDrift` (1 -> 1.10 plus slow pan/rotation with incommensurate periods).
+- **Shake:** seeded value noise (integer hash, smoothstep between lattice points, 14 Hz), `noise(seed, t)`; the project's `effects.seed` makes it unique but identical in Preview and Export.
+- **Cover guarantee:** `scale` is raised just enough that the image still covers the frame after translate+rotate (`cos+sin*max(aspect,1/aspect) + 2*max|t|`). A renderer never has to handle empty borders. Cost: 1 degree of rotation at 16:9 = ~3 % extra scale, which is why rotations are small.
+- **EffectState:** `{timeMs, scale, rotationDeg, translateX, translateY, opacity, glow, intensity, shake, audio:{amplitude,bass,mid,treble}, audioReactive}`. Transform order for a renderer: translate (fraction of frame w/h), rotate, scale, about the frame centre. Phase 5 animates one layer (the background image); later layers add fields (additive).
+- **No wave data** (no audio, not analysed yet, empty): `audioReactive=false`, audio-driven parts neutral, time-based motion still runs.
+- **Project schema:** `effects: {preset, motion, intensity, smoothing, seed}` (additive, old projects get defaults; unknown future keys are kept). `backgroundMotion` from Phase 1 is a legacy placeholder the engine does not use.
+- **Bridge:** `getEffectState({projectId, file, timeMs, durationMs, effects, aspect})`. Native keeps the wave table and the built engine between calls (reloaded when the audio is replaced/removed/re-analysed or settings change); it never analyses or reads the audio. The future native renderer calls `EffectEngine` directly, with no bridge in between. The FX tab asks at most ~8x/s, one call at a time, only while the tab is open.
+- **Phase 6 contract:** `RenderState(timeMs, durationMs, playing, effects)`; build it with `engine.getEffectState(timeMs)` for both the live preview clock and every export frame.
+
 ## Native build path (learned the hard way)
 
 - `native/` must sit in the repo ROOT next to `config.json`. APKMaker silently skips a missing/misplaced `native/`.

@@ -8,6 +8,7 @@ cat "$T"/classes*.dex | strings | grep -q "MvmBridgePlugin" || fail "MvmBridgePl
 cat "$T"/classes*.dex | strings | grep -q "pickMediaResult"  || fail "pickMediaResult missing from the APK dex"
 cat "$T"/classes*.dex | strings | grep -q "MvmDiagPlugin"     || fail "MvmDiagPlugin missing from the APK dex"
 cat "$T"/classes*.dex | strings | grep -q "PcmAnalyzer"     || fail "PcmAnalyzer missing from the APK dex"
+cat "$T"/classes*.dex | strings | grep -q "EffectEngine"    || fail "EffectEngine missing from the APK dex"
 cat "$T"/classes*.dex | strings | grep -q "AudioAnalyzer"    || fail "AudioAnalyzer missing from the APK dex"
 cat "$T"/classes*.dex | strings | grep -q "AudioEngine"     || fail "AudioEngine missing from the APK dex"
 cat "$T"/classes*.dex | strings | grep -q "MediaManager"     || fail "MediaManager missing from the APK dex"

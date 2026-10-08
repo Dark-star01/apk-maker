@@ -13,11 +13,16 @@ export const state = {
   thumb: null, // { file, url } data URL of the background thumbnail
   play: freshPlay(), // playback mirror of the native AudioEngine (see ui/playback.js)
   wave: freshWave(), // analysis state + loaded wave data (see ui/analysis.js)
+  fx: freshFx(), // last EffectState received from native (see ui/effects.js)
 };
 
 export function freshWave() {
   // status: none | loading | analyzing | ready | error
   return { status: 'none', progress: 0, data: null, error: null };
+}
+
+export function freshFx() {
+  return { values: null, error: null, busy: false, at: 0, sig: null, pos: 0, dur: 0 };
 }
 
 export function freshPlay() {
@@ -63,7 +68,7 @@ export function setProject(project) {
   state.busy = { audio: false, image: false };
   state.mediaOk = { audio: true, background: true };
   state.thumb = null;
-  if (!same) { state.play = freshPlay(); state.wave = freshWave(); }
+  if (!same) { state.play = freshPlay(); state.wave = freshWave(); state.fx = freshFx(); }
   emit();
 }
 

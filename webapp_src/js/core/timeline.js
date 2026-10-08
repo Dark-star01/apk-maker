@@ -7,7 +7,7 @@ export function audioKey(project) {
   return project.id + '|' + (a ? a.file + ':' + a.sizeBytes + ':' + a.durationMs + ':' + a.rev : '');
 }
 
-export function renderStateAt(project, timeMs, { durationMs, playing, waveData } = {}) {
+export function renderStateAt(project, timeMs, { durationMs, playing, waveData, effectState } = {}) {
   const audio = project.media.audio;
   const dur = durationMs > 0 ? durationMs : (audio ? audio.durationMs : 0);
   const t = Math.min(Math.max(0, timeMs || 0), dur || 0);
@@ -19,6 +19,7 @@ export function renderStateAt(project, timeMs, { durationMs, playing, waveData }
     playing: !!playing,
     aspectRatio: project.aspectRatio,
     background: bg ? { file: bg.file, width: bg.width, height: bg.height, motion: project.backgroundMotion } : null,
+    effects: effectState || null, // EffectState from native EffectEngine.getEffectState (same shape Preview and Export will use)
     wave: { style: project.wave.style, position: project.wave.position, data: waveData || null /* WaveData from core/wavedata.js */ },
   };
 }
