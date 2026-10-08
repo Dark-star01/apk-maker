@@ -64,7 +64,7 @@ input[type=range] { flex: 1; min-width: 0; height: 28px; accent-color: var(--acc
 .row + .row { border-top: 1px solid var(--line); }
 .row .label { color: var(--muted); font-size: 13px; flex: none; }
 .row .value { text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.btn { min-height: 40px; padding: 0 16px; border-radius: 10px; background: var(--surface-2); }
+.btn { white-space: nowrap; min-height: 40px; padding: 0 16px; border-radius: 10px; background: var(--surface-2); }
 .btn.accent { background: var(--accent); }
 .seg { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; }
 .seg button { min-height: 36px; padding: 0 12px; border-radius: 8px; font-size: 14px; }
@@ -130,3 +130,8 @@ input[type=text] { width: 100%; min-height: 44px; padding: 0 12px; border-radius
 .play { font-size: 18px; }
 #lanes { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
 .tracks { gap: 2px; }
+
+/* Waveform (Phase 4) */
+.lane-bar.wave-ready { height: 56px; border-style: solid; border-color: transparent; background: var(--surface); display: flex; align-items: center; }
+.lane-bar.wave-ready canvas { display: block; margin: 0 auto; }
+.lane-bar .fill.progress { opacity: .3; right: auto; transition: width .3s linear; }

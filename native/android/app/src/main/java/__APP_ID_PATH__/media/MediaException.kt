@@ -21,5 +21,11 @@ class MediaException(val code: String, message: String, cause: Throwable? = null
         const val AUDIO_UNPLAYABLE = "AUDIO_UNPLAYABLE"
         const val NO_AUDIO = "NO_AUDIO"
         const val PLAYER_FAILED = "PLAYER_FAILED"
+
+        // Analysis (Phase 4)
+        const val ANALYSIS_UNSUPPORTED = "ANALYSIS_UNSUPPORTED"
+        const val ANALYSIS_FAILED = "ANALYSIS_FAILED"
+        const val ANALYSIS_CANCELLED = "ANALYSIS_CANCELLED"
+        const val NO_WAVE_DATA = "NO_WAVE_DATA"
     }
 }

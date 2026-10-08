@@ -4,6 +4,7 @@ import { state, mutate } from './state.js';
 import { WAVE_STYLES, outputSize } from '../core/schema.js';
 import { bridge } from '../core/bridge.js';
 import { pick, remove } from './media.js';
+import { waveLabel, waveSummary, mountWave, reanalyze } from './analysis.js';
 import { MSG } from './messages.js';
 
 const LABELS = { line: 'Line', bars: 'Bars', mirrored: 'Mirrored', bottom: 'Bottom', custom: 'Custom', manual: 'Manual', adaptive: 'Adaptive' };
@@ -36,6 +37,20 @@ function backgroundView() {
   return { status: 'ready', text: background.name + dims };
 }
 
+// WAVE lane: the real waveform (one canvas) once Kotlin's analysis is ready, otherwise a status line.
+function waveLane(l) {
+  const w = state.wave;
+  const bar = h('div', { class: 'lane-bar ' + (w.status === 'ready' ? 'wave-ready' : 'slot') });
+  if (w.status === 'ready') mountWave(bar);
+  else {
+    const analyzing = w.status === 'analyzing';
+    bar.append(
+      analyzing ? h('div', { class: 'fill progress', id: 'wave-progress', style: { background: l.color, width: Math.round(w.progress * 100) + '%' } }) : null,
+      h('div', { class: 'name wave-label', dir: 'auto' }, waveLabel()));
+  }
+  return h('div', { class: 'lane' }, h('div', { class: 'lane-title' }, l.title), bar);
+}
+
 // ── Timeline lanes ──
 export function renderTracks() {
   const root = $('#lanes');
@@ -43,10 +58,10 @@ export function renderTracks() {
   const lanes = [
     { title: '🎵 AUDIO', view: audioView(), color: 'var(--lane-audio)' },
     { title: '🖼 BACKGROUND', view: backgroundView(), color: 'var(--lane-bg)' },
-    // Placeholder slot: Phase 4 draws the real waveform here (data from the analysis track).
-    { title: '〰 WAVE', view: { status: 'slot', text: `${LABELS[state.project.wave.style]} · waveform data comes in a later phase` }, color: 'var(--lane-wave)' },
+    { title: '〰 WAVE', wave: true, color: 'var(--lane-wave)' },
   ];
   for (const l of lanes) {
+    if (l.wave) { root.append(waveLane(l)); continue; }
     const ready = l.view.status === 'ready';
     root.append(h('div', { class: 'lane' },
       h('div', { class: 'lane-title' }, l.title),
@@ -78,8 +93,15 @@ function mediaPanel() {
 
 function wavePanel() {
   const w = state.project.wave;
+  const hasAudio = !!state.project.media.audio;
+  const busy = state.wave.status === 'analyzing' || state.wave.status === 'loading';
   const set = (patch) => mutate((p) => Object.assign(p.wave, patch));
   return h('div', {},
+    row('Analysis', h('span', { class: 'value wave-label', dir: 'auto' }, waveSummary())),
+    hasAudio && bridge.isNative()
+      ? h('div', { class: 'row' }, h('span', { class: 'hint' }, 'Computed once, then cached'),
+        h('button', { class: 'btn', type: 'button', disabled: busy, onclick: reanalyze }, 'Analyze again'))
+      : null,
     row('Style', seg(WAVE_STYLES, w.style, (v) => set({ style: v }))),
     row('Color', seg(['manual', 'adaptive'], w.colorMode, (v) => set({ colorMode: v }))),
     w.colorMode === 'manual'

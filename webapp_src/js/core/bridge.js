@@ -117,6 +117,18 @@ export const bridge = {
     try { return p.addListener('playback', cb); } catch (e) { return null; }
   },
 
+  // ── Audio analysis (Kotlin computes it; JS only asks and draws) ──
+  // analyzeAudio resolves when the cache file is written (or was already valid): { cached, sampleRate, count, durationMs }.
+  analyzeAudio(projectId, file, durationMs, force) { return call('analyzeAudio', { projectId, file, durationMs, force: !!force }); },
+  // { sampleRate, count, durationMs, data: base64 } or rejects NO_WAVE_DATA (never stale data).
+  getWaveData(projectId, file) { return call('getWaveData', { projectId, file }); },
+  cancelAnalysis() { return call('cancelAnalysis'); },
+  onAnalysisProgress(cb) {
+    const p = plugin();
+    if (!p || typeof p.addListener !== 'function') return null;
+    try { return p.addListener('analysisProgress', cb); } catch (e) { return null; }
+  },
+
   async removeMedia(projectId, kind) {
     if (!plugin()) return;
     await call('removeMedia', { projectId, kind });

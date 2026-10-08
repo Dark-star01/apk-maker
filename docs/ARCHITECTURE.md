@@ -75,6 +75,20 @@ draws the video. Audio analysis (volume/bass/mid/treble) is computed once into a
 - Leaving the app pauses audio (no background service). Position is saved in the project (`playhead.positionMs`) and restored paused on reopen.
 - Seeking uses `SEEK_CLOSEST` on API 26+; VBR MP3 seeks can be a little off on older Android.
 
+## Phase 4 decisions (audio analysis -> wave data)
+
+Pipeline: `audio file -> Kotlin AudioAnalyzer (streaming decode) -> PcmAnalyzer (DSP) -> analysis.bin (cache) -> getWaveData -> JS typed arrays -> canvas`.
+JS never analyses audio.
+
+- **Decoding:** `MediaExtractor` + `MediaCodec` used purely as an audio decoder (platform classes, no dependency, no permission). WAV/PCM skips the codec. One decoder buffer at a time; the song is never in memory.
+- **Resolution:** 30 points/s. 3 min = 5 400 points; stored as 4 bytes per point (21 KB), 30 min = 216 KB.
+- **Features per point:** `amplitude` (RMS of the 1/30 s window), `bass` (<250 Hz), `mid` (250 Hz-4 kHz), `treble` (>4 kHz). Bands = four 2nd-order Butterworth biquads (12 dB/oct, ~-24 dB leakage between bands). Mono mix of all channels.
+- **Normalisation (0..1):** each series is divided by its OWN 99th percentile in this track, clamped to 1, stored as 0..255. So a value means "how loud compared with the loud parts of the same band in this song", not absolute loudness, and series are not comparable with each other. Anything below -70 dBFS stays 0 (silence is never amplified).
+- **wave.data shape (JS, `core/wavedata.js`):** `{ sampleRate:30, count, durationMs, amplitude/bass/mid/treble: Uint8Array, point(i) -> {time, amplitude, bass, mid, treble}, indexAt(ms) }`. Compact typed arrays instead of an array of objects (a 30-min song would otherwise be 54 000 objects). `renderStateAt().wave.data` carries it to the future Renderer. The project JSON is unchanged (no wave data inside it).
+- **Bridge:** `analyzeAudio({projectId,file,durationMs,force})` (+ `analysisProgress` events, <=1 per 5 % and 300 ms), `getWaveData`, `cancelAnalysis`.
+- **Cache:** `projects/<id>/analysis.bin` = header (version, rate, count, duration, audio fingerprint) + bytes. Fingerprint = size + modified time + CRC of the first and last 64 KB of the audio (never the whole file). It is only used if the fingerprint matches the CURRENT audio file; importing/removing audio also deletes it; a cache written for a file that changed during analysis is never stored. JS identity of the audio also includes `rev` (import time) so a replaced file with equal size/duration is still detected.
+- **Threads:** analysis runs on its own background-priority thread; playback and UI are untouched. A newer request, a replace or a remove cancels the running analysis.
+
 ## Native build path (learned the hard way)
 
 - `native/` must sit in the repo ROOT next to `config.json`. APKMaker silently skips a missing/misplaced `native/`.

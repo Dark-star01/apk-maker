@@ -6,7 +6,7 @@ import { $, formatTime, toast } from './dom.js';
 import { state, emit, scheduleSave, flushSave, freshPlay } from './state.js';
 import { bridge } from '../core/bridge.js';
 import { MSG, errorMessage } from './messages.js';
-import { renderStateAt } from '../core/timeline.js';
+import { renderStateAt, audioKey } from '../core/timeline.js';
 
 const FRAME_MS = 50;        // max UI redraw rate while playing
 const SEEK_THROTTLE_MS = 120; // max native seeks per second while scrubbing
@@ -87,7 +87,7 @@ export async function sync() {
   const project = state.project;
   if (!project) return;
   const a = project.media.audio;
-  const key = project.id + '|' + (a ? a.file + ':' + a.sizeBytes + ':' + a.durationMs : '');
+  const key = audioKey(project);
   if (key === loadedKey) return;
   const sameProject = loadedKey !== null && loadedKey.split('|')[0] === project.id; // audio replaced, not project opened
   loadedKey = key;
@@ -217,7 +217,7 @@ export function draw(force) {
   setText('#time-total', tot);
   setText('#ruler-end', tot);
   setText('#ruler-mid', formatTime(dur / 2));
-  const rs = renderStateAt(state.project, pos, { durationMs: dur, playing: pl.status === 'playing' });
+  const rs = renderStateAt(state.project, pos, { durationMs: dur, playing: pl.status === 'playing', waveData: state.wave.data });
   setText('#preview-time', formatTime(rs.timeMs) + ' / ' + tot);
 
   const playing = pl.status === 'playing';

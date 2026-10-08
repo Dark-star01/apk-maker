@@ -15,3 +15,4 @@ grep -q "^package $APP_ID" "$DIR/MainActivity.kt" || fail "MainActivity package 
 echo "✅ MVM guard: native bridge files are in place ($(find "$DIR" -name '*.kt' | wc -l) Kotlin files)"
 [ -f "$DIR/bridge/MvmDiagPlugin.kt" ] && [ -f "$DIR/bridge/BootDiag.kt" ] || { echo "❌ MVM guard: diag plugin files missing"; exit 1; }
 [ -f "$DIR/audio/AudioEngine.kt" ] || { echo "❌ MVM guard: audio/AudioEngine.kt missing"; exit 1; }
+for f in AudioAnalyzer PcmAnalyzer WaveData; do [ -f "$DIR/analysis/$f.kt" ] || { echo "❌ MVM guard: analysis/$f.kt missing"; exit 1; }; done

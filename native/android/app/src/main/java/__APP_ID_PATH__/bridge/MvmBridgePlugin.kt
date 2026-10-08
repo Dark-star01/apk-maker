@@ -5,8 +5,13 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Process
+import android.util.Base64
 import android.util.Log
 import androidx.activity.result.ActivityResult
+import __APP_ID__.analysis.AudioAnalyzer
+import __APP_ID__.analysis.WaveCache
+import __APP_ID__.analysis.WaveData
 import __APP_ID__.audio.AudioEngine
 import __APP_ID__.media.MediaException
 import __APP_ID__.media.MediaManager
@@ -18,6 +23,7 @@ import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The single Web <-> Kotlin entry point. JavaScript calls these methods through
@@ -32,6 +38,8 @@ import java.util.concurrent.Executors
 class MvmBridgePlugin : Plugin() {
 
     private val io: ExecutorService = Executors.newSingleThreadExecutor()
+    private val analysisIo: ExecutorService = Executors.newSingleThreadExecutor { r -> Thread(r, "mvm-analysis") }
+    private val analysisGen = AtomicInteger(0) // bumping it cancels every running/queued analysis
     private val media by lazy { MediaManager(context) }
     private val engine by lazy { AudioEngine(context) { snap -> notifyListeners("playback", snapshotJs(snap)) } }
 
@@ -114,6 +122,7 @@ class MvmBridgePlugin : Plugin() {
                 out.put("cancelled", false)
                 out.put("kind", kind)
                 if (kind == KIND_AUDIO) {
+                    analysisGen.incrementAndGet() // the old audio is about to be replaced: stop analysing it
                     val r = media.importAudio(uri, projectId)
                     val m = JSObject()
                     m.put("file", r.file)
@@ -123,6 +132,7 @@ class MvmBridgePlugin : Plugin() {
                     m.put("durationMs", r.durationMs)
                     m.put("sampleRate", r.sampleRate)
                     m.put("channels", r.channels)
+                    m.put("rev", r.rev)
                     out.put("media", m)
                 } else {
                     val r = media.importImage(uri, projectId)
@@ -186,6 +196,7 @@ class MvmBridgePlugin : Plugin() {
                 ?: throw MediaException(MediaException.BAD_REQUEST, "projectId is required")
             val kind = call.getString("kind")
             if (kind != KIND_AUDIO && kind != KIND_IMAGE) throw MediaException(MediaException.BAD_REQUEST, "bad kind")
+            if (kind == KIND_AUDIO) analysisGen.incrementAndGet()
             media.removeMedia(projectId, kind)
             call.resolve()
         } catch (t: Throwable) {
@@ -278,6 +289,103 @@ class MvmBridgePlugin : Plugin() {
         return o
     }
 
+    // ── Audio analysis (Phase 4) ────────────────────────────────────────────
+    // Wave data = 30 points/s of {amplitude, bass, mid, treble}, computed once by Kotlin and cached next to the
+    // audio file. JS never analyses audio. See analysis/WaveData.kt for the exact meaning of the values.
+
+    // JS: await ...analyzeAudio({ projectId, file, durationMs?, force? })
+    // Resolves { cached, sampleRate, count, durationMs } once the cache file is written (or was already valid).
+    // While running it emits "analysisProgress" { progress: 0..1 } (at most every 5% / 300 ms).
+    @PluginMethod
+    fun analyzeAudio(call: PluginCall) {
+        val projectId = call.getString("projectId")
+        val file = call.getString("file")
+        val durationMs = call.getDouble("durationMs")?.toLong() ?: 0L
+        val force = call.getBoolean("force") ?: false
+        val gen = analysisGen.incrementAndGet() // supersedes any earlier analysis
+        val cancelled = { analysisGen.get() != gen }
+
+        analysisIo.execute {
+            try {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND) // never compete with playback / UI
+                if (projectId.isNullOrBlank() || file.isNullOrBlank()) {
+                    throw MediaException(MediaException.BAD_REQUEST, "projectId and file are required")
+                }
+                if (cancelled()) throw MediaException(MediaException.ANALYSIS_CANCELLED, "Cancelled")
+                val f = media.resolve(projectId, file) ?: throw MediaException(MediaException.AUDIO_MISSING, "Audio file is missing")
+                val fingerprint = WaveCache.fingerprint(f)
+                val cacheFile = media.analysisFile(projectId)
+
+                if (!force) {
+                    val cached = WaveCache.read(cacheFile, fingerprint)
+                    if (cached != null) {
+                        call.resolve(waveSummary(cached, true))
+                        return@execute
+                    }
+                }
+
+                var lastP = -1.0
+                var lastAt = 0L
+                val data = AudioAnalyzer().analyze(f, durationMs, cancelled) { p ->
+                    val now = System.currentTimeMillis()
+                    if (p - lastP >= 0.05 && now - lastAt >= 300) {
+                        lastP = p; lastAt = now
+                        val o = JSObject()
+                        o.put("progress", p)
+                        notifyListeners("analysisProgress", o)
+                    }
+                }
+                if (cancelled()) throw MediaException(MediaException.ANALYSIS_CANCELLED, "Cancelled")
+                // The audio file may have been replaced while we were decoding it: never cache for a different file.
+                if (WaveCache.fingerprint(f) != fingerprint) throw MediaException(MediaException.ANALYSIS_CANCELLED, "Audio changed")
+                try {
+                    WaveCache.write(cacheFile, media.analysisTmp(projectId), fingerprint, data)
+                } catch (e: java.io.IOException) {
+                    throw MediaException(MediaException.STORAGE_FAILED, "Cannot store the analysis", e)
+                }
+                call.resolve(waveSummary(data, false))
+            } catch (t: Throwable) {
+                fail(call, t)
+            }
+        }
+    }
+
+    // JS: await ...getWaveData({ projectId, file })
+    // Resolves { sampleRate, count, durationMs, data: <base64 of count*4 bytes: amplitude|bass|mid|treble, 0..255> },
+    // or rejects NO_WAVE_DATA when there is no valid cache for the CURRENT audio file (never returns stale data).
+    @PluginMethod
+    fun getWaveData(call: PluginCall) {
+        try {
+            val projectId = call.getString("projectId")
+                ?: throw MediaException(MediaException.BAD_REQUEST, "projectId is required")
+            val file = call.getString("file")
+                ?: throw MediaException(MediaException.BAD_REQUEST, "file is required")
+            val f = media.resolve(projectId, file) ?: throw MediaException(MediaException.AUDIO_MISSING, "Audio file is missing")
+            val data = WaveCache.read(media.analysisFile(projectId), WaveCache.fingerprint(f))
+                ?: throw MediaException(MediaException.NO_WAVE_DATA, "No wave data for this audio")
+            val out = waveSummary(data, true)
+            out.put("data", Base64.encodeToString(data.planar, Base64.NO_WRAP))
+            call.resolve(out)
+        } catch (t: Throwable) {
+            fail(call, t)
+        }
+    }
+
+    @PluginMethod
+    fun cancelAnalysis(call: PluginCall) {
+        analysisGen.incrementAndGet()
+        call.resolve()
+    }
+
+    private fun waveSummary(d: WaveData, cached: Boolean): JSObject {
+        val o = JSObject()
+        o.put("cached", cached)
+        o.put("sampleRate", d.pointsPerSec)
+        o.put("count", d.count)
+        o.put("durationMs", d.durationMs)
+        return o
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private fun fail(call: PluginCall, t: Throwable) {
@@ -296,6 +404,8 @@ class MvmBridgePlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        analysisGen.incrementAndGet()
+        analysisIo.shutdown()
         engine.runOnMain { engine.release(silent = true) }
         io.shutdown()
         super.handleOnDestroy()

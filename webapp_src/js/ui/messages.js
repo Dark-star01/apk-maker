@@ -25,6 +25,8 @@ const ERRORS = {
   AUDIO_UNPLAYABLE: 'تعذر تشغيل ملف الصوت. جرّب ملفًا آخر.',
   PLAYER_FAILED: 'توقف المشغّل بسبب خطأ. اضغط تشغيل للمحاولة مرة أخرى.',
   NO_AUDIO: MSG.noAudio,
+  ANALYSIS_UNSUPPORTED: 'تعذر تحليل هذا الملف الصوتي، لذلك لن تظهر الموجة. التشغيل يعمل بشكل طبيعي.',
+  ANALYSIS_FAILED: 'فشل تحليل الصوت. يمكنك إعادة المحاولة من تبويب Wave.',
   NO_NATIVE: MSG.needNative,
 };
 

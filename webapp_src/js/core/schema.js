@@ -24,7 +24,7 @@ export function defaults() {
     fps: 30,
     media: {
       // References only (never file bytes). `file` is a name inside the project's native folder.
-      // audio:      { file, name, mime, sizeBytes, durationMs, sampleRate, channels }
+      // audio:      { file, name, mime, sizeBytes, durationMs, sampleRate, channels, rev }
       // background: { file, thumb, name, mime, sizeBytes, width, height }
       audio: null,
       background: null,
@@ -88,6 +88,7 @@ export function sanitizeAudio(a) {
     durationMs: nonNeg(a.durationMs),
     sampleRate: nonNeg(a.sampleRate),
     channels: nonNeg(a.channels),
+    rev: nonNeg(a.rev), // import time; part of the audio identity (see core/timeline.js audioKey)
   };
 }
 

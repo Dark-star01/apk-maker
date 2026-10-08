@@ -25,6 +25,7 @@ class MediaManager(context: Context) {
         val durationMs: Long,
         val sampleRate: Int,
         val channels: Int,
+        val rev: Long, // import time: changes on every (re)import, so caches/players can tell a replaced file even if size and duration match
     )
 
     class ImageResult(
@@ -49,7 +50,7 @@ class MediaManager(context: Context) {
             files.copy(appContext.contentResolver, uri, tmp, source.size)
             val info = AudioInspector.inspect(tmp, source.name)
 
-            files.removeByPrefix(dir, "audio.")
+            files.removeByPrefix(dir, "audio.", ANALYSIS_NAME) // a new audio file never inherits the old analysis
             val finalFile = File(dir, "audio." + info.ext)
             if (!tmp.renameTo(finalFile)) {
                 throw MediaException(MediaException.STORAGE_FAILED, "Cannot store the audio file")
@@ -62,6 +63,7 @@ class MediaManager(context: Context) {
                 durationMs = info.durationMs,
                 sampleRate = info.sampleRate,
                 channels = info.channels,
+                rev = System.currentTimeMillis(),
             )
         } finally {
             tmp.delete() // no-op after a successful rename
@@ -103,6 +105,10 @@ class MediaManager(context: Context) {
         }
     }
 
+    /** Where the wave-data cache of a project lives (and its temp name, which cleanTemp() sweeps). */
+    fun analysisFile(projectId: String): File = files.file(projectId, ANALYSIS_NAME)
+    fun analysisTmp(projectId: String): File = files.file(projectId, "tmp_analysis")
+
     /** The project file if it exists and is non-empty, else null. Throws BAD_REQUEST for unsafe names. */
     fun resolve(projectId: String, name: String): File? {
         val f = files.file(projectId, name)
@@ -126,7 +132,7 @@ class MediaManager(context: Context) {
     fun removeMedia(projectId: String, kind: String) {
         val dir = files.dir(projectId)
         if (!dir.isDirectory) return
-        if (kind == "audio") files.removeByPrefix(dir, "audio.") else files.removeByPrefix(dir, "background.", "background_thumb.")
+        if (kind == "audio") files.removeByPrefix(dir, "audio.", ANALYSIS_NAME) else files.removeByPrefix(dir, "background.", "background_thumb.")
     }
 
     fun deleteProject(projectId: String) {
@@ -154,5 +160,6 @@ class MediaManager(context: Context) {
 
     companion object {
         private const val MAX_THUMB_BYTES = 2L * 1024L * 1024L
+        const val ANALYSIS_NAME = "analysis.bin"
     }
 }

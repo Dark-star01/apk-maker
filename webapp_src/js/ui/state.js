@@ -12,7 +12,13 @@ export const state = {
   mediaOk: { audio: true, background: true }, // false => referenced file is missing on disk
   thumb: null, // { file, url } data URL of the background thumbnail
   play: freshPlay(), // playback mirror of the native AudioEngine (see ui/playback.js)
+  wave: freshWave(), // analysis state + loaded wave data (see ui/analysis.js)
 };
+
+export function freshWave() {
+  // status: none | loading | analyzing | ready | error
+  return { status: 'none', progress: 0, data: null, error: null };
+}
 
 export function freshPlay() {
   // status: idle | loading | ready | playing | paused | ended | error
@@ -52,11 +58,12 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('pagehide', saveNow);
 
 export function setProject(project) {
+  const same = !!state.project && state.project.id === project.id;
   state.project = project;
   state.busy = { audio: false, image: false };
   state.mediaOk = { audio: true, background: true };
   state.thumb = null;
-  state.play = freshPlay();
+  if (!same) { state.play = freshPlay(); state.wave = freshWave(); }
   emit();
 }
 
