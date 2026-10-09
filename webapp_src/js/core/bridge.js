@@ -136,6 +136,18 @@ export const bridge = {
     return call('getEffectState', { projectId, file: file || null, timeMs, durationMs: durationMs || 0, effects, aspect });
   },
 
+  // ── Native Preview renderer (Kotlin draws on a TextureView over #preview; JS only places it and describes the project) ──
+  // rect = { x, y, width, height, dpr, visible }  (CSS pixels of #preview + devicePixelRatio)
+  attachPreview(rect) { return call('attachPreview', rect); },
+  setPreviewRect(rect) { return call('setPreviewRect', rect); },
+  detachPreview() { return call('detachPreview'); },
+  // { projectId, background, audioFile, durationMs, effects, aspect }: no pixels, only names and settings.
+  setPreviewProject(p) { return call('setPreviewProject', p); },
+  // { renderer, surface, frame, timeMs, fps, targetFps, frames, drawMs, imageW, imageH, background, audioReactive, error? }
+  getRendererState() { return call('getRendererState'); },
+  // Renders timeMs twice (and otherMs once) offscreen with the real Renderer: { identical, crcA, crcB, crcOther, ... }
+  rendererSelfTest(args) { return call('rendererSelfTest', args); },
+
   async removeMedia(projectId, kind) {
     if (!plugin()) return;
     await call('removeMedia', { projectId, kind });

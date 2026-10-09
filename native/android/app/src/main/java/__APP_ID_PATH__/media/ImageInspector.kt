@@ -109,15 +109,15 @@ internal object ImageInspector {
         }
     }
 
-    private fun readOrientation(path: String): Int = try {
+    internal fun readOrientation(path: String): Int = try {
         ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
     } catch (e: Exception) {
         ExifInterface.ORIENTATION_NORMAL
     }
 
-    private fun swapsAxes(o: Int): Boolean = o == 5 || o == 6 || o == 7 || o == 8
+    internal fun swapsAxes(o: Int): Boolean = o == 5 || o == 6 || o == 7 || o == 8
 
-    private fun matrixFor(o: Int): Matrix? {
+    internal fun matrixFor(o: Int): Matrix? {
         val m = Matrix()
         when (o) {
             2 -> m.setScale(-1f, 1f)

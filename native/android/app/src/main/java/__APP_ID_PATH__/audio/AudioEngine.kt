@@ -7,8 +7,10 @@ import android.media.MediaPlayer
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import __APP_ID__.media.MediaException
+import __APP_ID__.render.PlaybackClock
 import __APP_ID__.timeline.RenderState
 import java.io.File
 
@@ -29,6 +31,9 @@ internal class AudioEngine(
     class Snapshot(val state: State, val positionMs: Long, val durationMs: Long, val errorCode: String?)
 
     private val main = Handler(Looper.getMainLooper())
+
+    /** The time the native Renderer follows (published on every state change and every tick while playing). */
+    val clock = PlaybackClock()
     private val audioManager = context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
     private var player: MediaPlayer? = null
@@ -69,7 +74,9 @@ internal class AudioEngine(
     }
 
     private fun emit() {
-        onChange(snapshot())
+        val snap = snapshot()
+        clock.sync(snap.positionMs, snap.state == State.PLAYING, snap.durationMs, SystemClock.elapsedRealtime())
+        onChange(snap)
     }
 
     // ── Commands ────────────────────────────────────────────────────────────

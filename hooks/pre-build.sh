@@ -16,4 +16,5 @@ echo "✅ MVM guard: native bridge files are in place ($(find "$DIR" -name '*.kt
 [ -f "$DIR/bridge/MvmDiagPlugin.kt" ] && [ -f "$DIR/bridge/BootDiag.kt" ] || { echo "❌ MVM guard: diag plugin files missing"; exit 1; }
 [ -f "$DIR/audio/AudioEngine.kt" ] || { echo "❌ MVM guard: audio/AudioEngine.kt missing"; exit 1; }
 for f in AudioAnalyzer PcmAnalyzer WaveData; do [ -f "$DIR/analysis/$f.kt" ] || { echo "❌ MVM guard: analysis/$f.kt missing"; exit 1; }; done
+for f in Renderer RenderLoop PreviewController FrameGeometry FrameComposer PlaybackClock BackgroundLoader; do [ -f "$DIR/render/$f.kt" ] || { echo "❌ MVM guard: render/$f.kt missing"; exit 1; }; done
 for f in EffectEngine EffectSettings EffectState AudioEnvelope BackgroundMotion DeterministicNoise Presets; do [ -f "$DIR/effects/$f.kt" ] || { echo "❌ MVM guard: effects/$f.kt missing"; exit 1; }; done

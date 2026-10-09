@@ -7,6 +7,7 @@ import { pick, remove } from './media.js';
 import { waveLabel, waveSummary, mountWave, reanalyze } from './analysis.js';
 import { MSG } from './messages.js';
 import { fxReset, fxLastText, fxRepaint } from './effects.js';
+import { rendererLine, rendererRepaint, runSelfTest } from './nativePreview.js';
 
 const LABELS = { line: 'Line', bars: 'Bars', mirrored: 'Mirrored', bottom: 'Bottom', custom: 'Custom', manual: 'Manual', adaptive: 'Adaptive' };
 
@@ -146,6 +147,7 @@ function fxPanel() {
     row('Background motion', select(MOTION_MODES, MOTION_LABELS, e.motion, (v) => set({ motion: v }))),
     row('Intensity', h('input', { type: 'range', min: 0, max: 200, value: Math.round(e.intensity * 100), onchange: (ev) => set({ intensity: Number(ev.target.value) / 100 }) })),
     row('Smoothing', h('input', { type: 'range', min: 0, max: 100, value: Math.round(e.smoothing * 100), onchange: (ev) => set({ smoothing: Number(ev.target.value) / 100 }) })),
+    h('div', { class: 'hint diag', 'data-rd': 'text', dir: 'ltr' }, rendererLine()),
     h('div', { class: 'hint', 'data-fx': 'status', dir: 'auto' }, bridge.isNative() ? fxLastText() : 'Effect values come from the native engine (app only)'),
     readRow('Scale', 'scale'), readRow('Rotation', 'rotationDeg'), readRow('Translate X', 'translateX'),
     readRow('Translate Y', 'translateY'), readRow('Opacity', 'opacity'),
@@ -165,6 +167,10 @@ function settingsPanel() {
     row('Aspect ratio', h('span', { class: 'value' }, p.aspectRatio)),
     row('Export size', h('span', { class: 'value' }, `${p.resolution} · ${size.width}×${size.height} · ${p.fps} fps`)),
     row('Native engine', nativeRow),
+    h('div', { class: 'hint diag', 'data-rd': 'text', dir: 'ltr' }, rendererLine()),
+    h('div', { class: 'row' }, h('span', { class: 'hint' }, 'Renders the same time twice and compares the pixels'),
+      h('button', { class: 'btn', type: 'button', onclick: runSelfTest }, 'Renderer self-test')),
+    h('div', { class: 'hint diag', 'data-rd': 'self', dir: 'ltr' }, '—'),
     h('div', { class: 'row' }, h('span', { class: 'hint' }, 'Tests the Web → Kotlin → Web connection'),
       h('button', { class: 'btn', type: 'button', onclick: runPing }, 'Test bridge')),
     h('div', { class: 'hint diag', dir: 'ltr' }, bridge.diagnose().map((l) => h('div', {}, l)), diagNative));
@@ -196,6 +202,7 @@ export function renderPanel() {
   const view = { media: mediaPanel, wave: wavePanel, fx: fxPanel, settings: settingsPanel }[state.tab] || mediaPanel;
   root.append(view());
   if (state.tab === 'fx') fxRepaint();
+  rendererRepaint();
 }
 
 export function renderTabs() {

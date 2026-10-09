@@ -7,6 +7,7 @@ import { openNewProject, openProjects, openExport } from './ui/dialogs.js';
 import { verify } from './ui/media.js';
 import { sync, draw, initPlayback } from './ui/playback.js';
 import { syncWave, initAnalysis } from './ui/analysis.js';
+import { syncPreview, initPreview } from './ui/nativePreview.js';
 import { store } from './core/store.js';
 
 let lastProjectId = null;
@@ -24,6 +25,7 @@ function render() {
   renderPanel();
   renderPreview();
   fitPreview();
+  syncPreview(); // tell native where the preview is / which project to draw (only if something changed)
   sync();      // (re)load the native player only if project/audio changed
   syncWave();  // (re)load/analyse wave data only if project/audio changed
   draw(true);  // transport, playhead, time labels
@@ -40,6 +42,7 @@ async function start() {
 
   initPlayback();
   initAnalysis();
+  initPreview();
   $('#btn-project').addEventListener('click', openProjects);
   $('#btn-export').addEventListener('click', () => { if (state.project) openExport(); });
   $('#tabs').addEventListener('click', (e) => {

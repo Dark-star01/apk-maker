@@ -13,6 +13,7 @@ export const state = {
   thumb: null, // { file, url } data URL of the background thumbnail
   play: freshPlay(), // playback mirror of the native AudioEngine (see ui/playback.js)
   wave: freshWave(), // analysis state + loaded wave data (see ui/analysis.js)
+  pv: { status: 'none', error: null, info: null }, // native preview renderer (see ui/nativePreview.js)
   fx: freshFx(), // last EffectState received from native (see ui/effects.js)
 };
 

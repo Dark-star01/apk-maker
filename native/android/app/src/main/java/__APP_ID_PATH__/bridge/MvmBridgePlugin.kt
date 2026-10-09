@@ -19,6 +19,8 @@ import __APP_ID__.effects.MotionMode
 import __APP_ID__.effects.Preset
 import __APP_ID__.media.MediaException
 import __APP_ID__.media.MediaManager
+import __APP_ID__.render.PreviewConfig
+import __APP_ID__.render.PreviewController
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -45,7 +47,15 @@ class MvmBridgePlugin : Plugin() {
     private val analysisIo: ExecutorService = Executors.newSingleThreadExecutor { r -> Thread(r, "mvm-analysis") }
     private val analysisGen = AtomicInteger(0) // bumping it cancels every running/queued analysis
     private val media by lazy { MediaManager(context) }
-    private val engine by lazy { AudioEngine(context) { snap -> notifyListeners("playback", snapshotJs(snap)) } }
+    private val engine by lazy {
+        AudioEngine(context) { snap ->
+            notifyListeners("playback", snapshotJs(snap))
+            previewRef?.onPlayback(snap.state == AudioEngine.State.PLAYING) // the native Preview follows the same state
+        }
+    }
+    @Volatile private var previewRef: PreviewController? = null
+    private val preview: PreviewController
+        get() = previewRef ?: synchronized(this) { previewRef ?: PreviewController(context, engine.clock, io).also { previewRef = it } }
 
     // ── Diagnostics ─────────────────────────────────────────────────────────
 
@@ -415,31 +425,12 @@ class MvmBridgePlugin : Plugin() {
             val timeMs = call.getDouble("timeMs") ?: 0.0
             val durationMs = call.getDouble("durationMs")?.toLong() ?: 0L
             val file = call.getString("file")
-            val fx = call.getObject("effects")
-            val settings = EffectSettings(
-                Preset.fromWire(fx?.optString("preset")),
-                MotionMode.fromWire(fx?.optString("motion")),
-                fx?.optDouble("intensity", 1.0) ?: 1.0,
-                fx?.optDouble("smoothing", 0.5) ?: 0.5,
-                fx?.optInt("seed", 1) ?: 1,
-                call.getDouble("aspect") ?: (16.0 / 9.0),
-            )
+            val settings = parseEffects(call)
             val st = synchronized(effectLock) {
-                val key = if (file.isNullOrBlank()) null else "$projectId|$file"
-                if (key != effWaveKey || (effWave == null && key != null)) {
-                    if (key != effWaveKey) { effEngine = null; effEngineSig = null }
-                    effWaveKey = key
-                    effWave = null
-                    if (key != null) {
-                        val f = media.resolve(projectId, file!!)
-                        val cache = media.analysisFile(projectId)
-                        // stat only until a cache exists: no audio-file I/O on every call while analysis is pending
-                        if (f != null && cache.isFile) effWave = WaveCache.read(cache, WaveCache.fingerprint(f))
-                    }
-                }
-                val sig = settings.signature() + "|" + durationMs + "|" + (effWave != null)
+                val wave = waveForLocked(projectId, file)
+                val sig = settings.signature() + "|" + durationMs + "|" + (wave != null)
                 if (effEngine == null || effEngineSig != sig) {
-                    effEngine = EffectEngine(settings, effWave, durationMs)
+                    effEngine = EffectEngine(settings, wave, durationMs)
                     effEngineSig = sig
                 }
                 effEngine!!.getEffectState(timeMs)
@@ -467,6 +458,140 @@ class MvmBridgePlugin : Plugin() {
         }
     }
 
+    private fun parseEffects(call: PluginCall): EffectSettings {
+        val fx = call.getObject("effects")
+        return EffectSettings(
+            Preset.fromWire(fx?.optString("preset")),
+            MotionMode.fromWire(fx?.optString("motion")),
+            fx?.optDouble("intensity", 1.0) ?: 1.0,
+            fx?.optDouble("smoothing", 0.5) ?: 0.5,
+            fx?.optInt("seed", 1) ?: 1,
+            call.getDouble("aspect") ?: (16.0 / 9.0),
+        )
+    }
+
+    /** The cached wave data of [file] (null if none yet). Caller holds [effectLock]. Never analyses. */
+    private fun waveForLocked(projectId: String, file: String?): WaveData? {
+        val key = if (file.isNullOrBlank()) null else "$projectId|$file"
+        if (key != effWaveKey || (effWave == null && key != null)) {
+            if (key != effWaveKey) { effEngine = null; effEngineSig = null }
+            effWaveKey = key
+            effWave = null
+            if (key != null) {
+                val f = media.resolve(projectId, file!!)
+                val cache = media.analysisFile(projectId)
+                // stat only until a cache exists: no audio-file I/O on every call while analysis is pending
+                if (f != null && cache.isFile) effWave = WaveCache.read(cache, WaveCache.fingerprint(f))
+            }
+        }
+        return effWave
+    }
+
+    // ── Preview renderer (Phase 6) ──────────────────────────────────────────
+    // The native Renderer draws on a TextureView placed over the page's #preview rectangle. JS only says WHERE
+    // (CSS pixels + devicePixelRatio) and WHICH project data; it never receives frames, and it is not the clock:
+    // the Renderer follows AudioEngine's clock. All methods answer { ok: true } (or a coded error).
+
+    // JS: await ...attachPreview({ x, y, width, height, dpr, visible })
+    @PluginMethod
+    fun attachPreview(call: PluginCall) = onUi(call) { wv, x, y, w, h, show -> preview.attach(wv, x, y, w, h, show) }
+
+    // JS: await ...setPreviewRect({ x, y, width, height, dpr, visible })  (moved, resized, or hidden behind a dialog)
+    @PluginMethod
+    fun setPreviewRect(call: PluginCall) = onUi(call) { wv, x, y, w, h, show -> preview.move(x, y, w, h, show) }
+
+    @PluginMethod
+    fun detachPreview(call: PluginCall) {
+        previewRef?.detach()
+        call.resolve(okJs())
+    }
+
+    // JS: await ...setPreviewProject({ projectId, background?, audioFile?, durationMs?, effects, aspect })
+    // Sends no pixels: the picture is read from the project folder, the wave from its cache. Only the picture decode is
+    // repeated when the picture itself (or the size it is needed at) changes, never when effect settings change.
+    @PluginMethod
+    fun setPreviewProject(call: PluginCall) {
+        try {
+            val projectId = call.getString("projectId")
+                ?: throw MediaException(MediaException.BAD_REQUEST, "projectId is required")
+            val settings = parseEffects(call)
+            val durationMs = call.getDouble("durationMs")?.toLong() ?: 0L
+            val bgName = call.getString("background")
+            val bg = if (bgName.isNullOrBlank()) null else media.resolve(projectId, bgName) ?: java.io.File(media.analysisFile(projectId).parentFile, "missing_" + bgName)
+            val wave = synchronized(effectLock) { waveForLocked(projectId, call.getString("audioFile")) }
+            preview.setProject(PreviewConfig(settings, wave, durationMs, bg))
+            call.resolve(okJs())
+        } catch (t: Throwable) {
+            fail(call, t)
+        }
+    }
+
+    // JS: await ...getRendererState() -> diagnostics (see PreviewController.Diag)
+    @PluginMethod
+    fun getRendererState(call: PluginCall) {
+        val o = JSObject()
+        val pv = previewRef
+        if (pv == null) {
+            o.put("renderer", "NONE"); o.put("surface", "DETACHED"); o.put("frame", "NONE YET")
+        } else {
+            val d = pv.diag()
+            o.put("renderer", d.renderer); o.put("surface", d.surface); o.put("frame", d.frame)
+            o.put("timeMs", d.timeMs); o.put("fps", d.fps); o.put("targetFps", d.targetFps)
+            o.put("frames", d.frames); o.put("drawMs", d.drawMs)
+            o.put("imageW", d.imageW); o.put("imageH", d.imageH)
+            o.put("background", d.background); o.put("audioReactive", d.reactive)
+            if (d.error != null) o.put("error", d.error)
+        }
+        call.resolve(o)
+    }
+
+    // JS: await ...rendererSelfTest({ timeMs, otherMs, aspect })
+    // Renders timeMs, otherMs, timeMs again with the real Renderer into an offscreen bitmap and compares the pixels.
+    @PluginMethod
+    fun rendererSelfTest(call: PluginCall) {
+        val t = call.getDouble("timeMs") ?: 10000.0
+        val other = call.getDouble("otherMs") ?: (t + 1234.0)
+        val aspect = call.getDouble("aspect") ?: (16.0 / 9.0)
+        io.execute {
+            try {
+                val r = preview.selfTest(t, other, aspect)
+                val o = JSObject()
+                o.put("identical", r.identical)
+                o.put("crcA", r.crcA.toString(16)); o.put("crcB", r.crcB.toString(16)); o.put("crcOther", r.crcOther.toString(16))
+                o.put("changesWithTime", r.changesWithTime)
+                o.put("scale", r.scale); o.put("rotationDeg", r.rotationDeg)
+                o.put("width", r.w); o.put("height", r.h)
+                call.resolve(o)
+            } catch (e: Throwable) {
+                fail(call, e)
+            }
+        }
+    }
+
+    private fun okJs(): JSObject { val o = JSObject(); o.put("ok", true); return o }
+
+    // Runs a view command on the UI thread with the rectangle converted from CSS px to device px.
+    private fun onUi(call: PluginCall, block: (android.webkit.WebView, Float, Float, Int, Int, Boolean) -> Unit) {
+        try {
+            val dpr = call.getDouble("dpr") ?: 1.0
+            val x = call.getDouble("x") ?: 0.0
+            val y = call.getDouble("y") ?: 0.0
+            val w = call.getDouble("width") ?: 0.0
+            val h = call.getDouble("height") ?: 0.0
+            val show = call.getBoolean("visible") ?: true
+            if (w <= 0 || h <= 0 || dpr <= 0) throw MediaException(MediaException.BAD_REQUEST, "bad preview rectangle")
+            activity.runOnUiThread {
+                try {
+                    val wv = bridge.webView
+                    block(wv, (wv.left + x * dpr).toFloat(), (wv.top + y * dpr).toFloat(), Math.round(w * dpr).toInt(), Math.round(h * dpr).toInt(), show)
+                    call.resolve(okJs())
+                } catch (t: Throwable) { fail(call, t) }
+            }
+        } catch (t: Throwable) {
+            fail(call, t)
+        }
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private fun fail(call: PluginCall, t: Throwable) {
@@ -481,10 +606,18 @@ class MvmBridgePlugin : Plugin() {
     // No background playback service in the MVP: leaving the app pauses the audio.
     override fun handleOnPause() {
         engine.runOnMain { engine.pauseIfPlaying() }
+        previewRef?.onActivityPause()
         super.handleOnPause()
     }
 
+    override fun handleOnResume() {
+        super.handleOnResume()
+        previewRef?.onActivityResume()
+    }
+
     override fun handleOnDestroy() {
+        previewRef?.release()
+        previewRef = null
         analysisGen.incrementAndGet()
         analysisIo.shutdown()
         engine.runOnMain { engine.release(silent = true) }
