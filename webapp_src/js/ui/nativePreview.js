@@ -24,7 +24,13 @@ function currentRect() {
   if (r.width < 4 || r.height < 4) return null;
   const dpr = window.devicePixelRatio || 1;
   const overlayOpen = !$('#overlay').hidden; // a dialog/sheet is open: the native view must not cover it
-  return { x: r.left, y: r.top, width: r.width, height: r.height, dpr, visible: !overlayOpen };
+  return { x: r.left, y: r.top, width: r.width, height: r.height, dpr, viewportWidth: window.innerWidth, visible: !overlayOpen };
+}
+
+// While the native view owns the picture the HTML stand-in (thumbnail + label) must not also be visible.
+function setNative(on) {
+  const el = $('#preview');
+  if (el) el.classList.toggle('native-on', !!on);
 }
 
 function projectPayload(project) {
@@ -38,6 +44,7 @@ function projectPayload(project) {
     durationMs: a ? a.durationMs : 0,
     effects: project.effects,
     aspect: aw / ah,
+    wave: project.wave,
   };
 }
 
@@ -49,7 +56,7 @@ export function syncPreview() {
   const rect = currentRect();
   if (!rect) return;
 
-  const rSig = [Math.round(rect.x * rect.dpr), Math.round(rect.y * rect.dpr), Math.round(rect.width * rect.dpr), Math.round(rect.height * rect.dpr), rect.visible].join(',');
+  const rSig = [Math.round(rect.x * rect.dpr), Math.round(rect.y * rect.dpr), Math.round(rect.width * rect.dpr), Math.round(rect.height * rect.dpr), rect.visible, rect.viewportWidth].join(',');
   const payload = projectPayload(project);
   const pSig = JSON.stringify(payload) + '|' + JSON.stringify(project.media.background) + '|' + audioKey(project) + '|' + state.wave.status;
   const needAttach = !attached;
@@ -61,7 +68,7 @@ export function syncPreview() {
 
   // One ordered queue: native sees attach -> rect -> project in this order, never interleaved.
   chain = chain.then(async () => {
-    if (needAttach) { await bridge.attachPreview(rect); attached = true; state.pv.status = 'attached'; }
+    if (needAttach) { await bridge.attachPreview(rect); attached = true; state.pv.status = 'attached'; setNative(true); }
     else if (needRect) await bridge.setPreviewRect(rect);
     if (needProject || needAttach) await bridge.setPreviewProject(payload);
     state.pv.error = null;
@@ -69,7 +76,7 @@ export function syncPreview() {
     state.pv.status = 'error';
     state.pv.error = (e && e.code) || 'UNEXPECTED';
     failedAt = performance.now();
-    attached = false; rectSig = ''; projSig = ''; // retry from scratch later
+    attached = false; rectSig = ''; projSig = ''; setNative(false); // retry from scratch later (the static stand-in shows again)
   });
 }
 
@@ -98,7 +105,17 @@ export function rendererLine() {
   return 'Renderer: ' + d.renderer + ' · Surface: ' + d.surface + ' · Frame: ' + d.frame + ' · Time: ' + t + 's · FPS: ' + d.fps + ' (target ' + d.targetFps + ') · Image: ' + img + (d.error ? ' · ' + d.error : '');
 }
 
+export function waveLine() {
+  const d = state.pv.info;
+  if (!bridge.isNative()) return 'Waveform overlay: app only';
+  if (!d || !d.waveStatus) return 'Waveform overlay: waiting…';
+  const names = { on: 'ENABLED', off: 'DISABLED', 'no data': 'ENABLED · data MISSING' };
+  return 'Waveform overlay: ' + (names[d.waveStatus] || d.waveStatus) + ' · style: ' + d.waveStyle + (d.waveError ? ' · error: ' + d.waveError : ' · error: none');
+}
+
 function paintDiag() {
+  const wl = waveLine();
+  document.querySelectorAll('[data-rd="wave"]').forEach((el) => { if (el.textContent !== wl) el.textContent = wl; });
   const line = rendererLine();
   document.querySelectorAll('[data-rd="text"]').forEach((el) => { if (el.textContent !== line) el.textContent = line; });
 }

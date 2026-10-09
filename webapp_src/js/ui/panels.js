@@ -7,7 +7,7 @@ import { pick, remove } from './media.js';
 import { waveLabel, waveSummary, mountWave, reanalyze } from './analysis.js';
 import { MSG } from './messages.js';
 import { fxReset, fxLastText, fxRepaint } from './effects.js';
-import { rendererLine, rendererRepaint, runSelfTest } from './nativePreview.js';
+import { rendererLine, waveLine, rendererRepaint, runSelfTest } from './nativePreview.js';
 
 const LABELS = { line: 'Line', bars: 'Bars', mirrored: 'Mirrored', bottom: 'Bottom', custom: 'Custom', manual: 'Manual', adaptive: 'Adaptive' };
 
@@ -104,18 +104,25 @@ function wavePanel() {
       ? h('div', { class: 'row' }, h('span', { class: 'hint' }, 'Computed once, then cached'),
         h('button', { class: 'btn', type: 'button', disabled: busy, onclick: reanalyze }, 'Analyze again'))
       : null,
+    row('Overlay', h('div', { class: 'seg' },
+      h('button', { type: 'button', class: w.enabled ? 'on' : '', onclick: () => set({ enabled: true }) }, 'On'),
+      h('button', { type: 'button', class: !w.enabled ? 'on' : '', onclick: () => set({ enabled: false }) }, 'Off'))),
     row('Style', seg(WAVE_STYLES, w.style, (v) => set({ style: v }))),
     row('Color', seg(['manual', 'adaptive'], w.colorMode, (v) => set({ colorMode: v }))),
     w.colorMode === 'manual'
       ? row('Wave color', h('input', { type: 'color', value: w.color, onchange: (e) => set({ color: e.target.value }) }))
       : h('div', { class: 'hint' }, 'Adaptive color is picked from the background image (needs a background).'),
-    row('Position', seg(['bottom', 'custom'], w.position, (v) => set({ position: v }))),
+    row('Position', seg(['top', 'center', 'bottom', 'custom'], w.position, (v) => set({ position: v }))),
     w.position === 'custom'
       ? row('Vertical', h('input', {
         type: 'range', min: 0, max: 100, value: Math.round(w.customY * 100),
         onchange: (e) => set({ customY: Number(e.target.value) / 100 }),
       }))
       : null,
+    row('Size', h('input', {
+      type: 'range', min: 5, max: 50, value: Math.round(w.height * 100),
+      onchange: (e) => set({ height: Number(e.target.value) / 100 }),
+    })),
     row('Reactive', h('div', { class: 'seg' },
       h('button', { type: 'button', class: w.reactive ? 'on' : '', onclick: () => set({ reactive: true }) }, 'On'),
       h('button', { type: 'button', class: !w.reactive ? 'on' : '', onclick: () => set({ reactive: false }) }, 'Off'))));
@@ -168,6 +175,7 @@ function settingsPanel() {
     row('Export size', h('span', { class: 'value' }, `${p.resolution} · ${size.width}×${size.height} · ${p.fps} fps`)),
     row('Native engine', nativeRow),
     h('div', { class: 'hint diag', 'data-rd': 'text', dir: 'ltr' }, rendererLine()),
+    h('div', { class: 'hint diag', 'data-rd': 'wave', dir: 'ltr' }, waveLine()),
     h('div', { class: 'row' }, h('span', { class: 'hint' }, 'Renders the same time twice and compares the pixels'),
       h('button', { class: 'btn', type: 'button', onclick: runSelfTest }, 'Renderer self-test')),
     h('div', { class: 'hint diag', 'data-rd': 'self', dir: 'ltr' }, '—'),

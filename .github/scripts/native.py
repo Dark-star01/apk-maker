@@ -567,7 +567,7 @@ def cmd_info():
 
 
 # ───────────── تشخيص مسار ملفات Native (مؤقت — لتتبع سبب غياب Kotlin من الـAPK) ─────────────
-_DIAG_NAMES = ('MainActivity.kt', 'MainActivity.java', 'MvmBridgePlugin.kt', 'MvmDiagPlugin.kt', 'MediaManager.kt', 'AudioEngine.kt', 'AudioAnalyzer.kt', 'PcmAnalyzer.kt', 'WaveData.kt', 'EffectEngine.kt', 'AudioEnvelope.kt', 'Renderer.kt', 'RenderLoop.kt', 'PreviewController.kt')
+_DIAG_NAMES = ('MainActivity.kt', 'MainActivity.java', 'MvmBridgePlugin.kt', 'MvmDiagPlugin.kt', 'MediaManager.kt', 'AudioEngine.kt', 'AudioAnalyzer.kt', 'PcmAnalyzer.kt', 'WaveData.kt', 'EffectEngine.kt', 'AudioEnvelope.kt', 'Renderer.kt', 'RenderLoop.kt', 'PreviewController.kt', 'WaveGeometry.kt', 'WaveOverlay.kt', 'WaveSettings.kt')
 
 
 def _find(root, names, skip=()):
@@ -636,7 +636,7 @@ def cmd_diagcheck():
         fail('MainActivity.kt لم يصل إلى android/ (المصدر موجود لكن النسخ لم يحدث)', 'راجع سجل خطوة 🧩 تطبيق ملفات Native')
     if found['MainActivity.java']:
         fail('MainActivity.java الافتراضي ما زال موجودًا بجانب MainActivity.kt')
-    for need in ('MvmBridgePlugin.kt', 'MvmDiagPlugin.kt', 'MediaManager.kt', 'AudioEngine.kt', 'AudioAnalyzer.kt', 'PcmAnalyzer.kt', 'WaveData.kt', 'EffectEngine.kt', 'AudioEnvelope.kt', 'Renderer.kt', 'RenderLoop.kt', 'PreviewController.kt'):
+    for need in ('MvmBridgePlugin.kt', 'MvmDiagPlugin.kt', 'MediaManager.kt', 'AudioEngine.kt', 'AudioAnalyzer.kt', 'PcmAnalyzer.kt', 'WaveData.kt', 'EffectEngine.kt', 'AudioEnvelope.kt', 'Renderer.kt', 'RenderLoop.kt', 'PreviewController.kt', 'WaveGeometry.kt', 'WaveOverlay.kt', 'WaveSettings.kt'):
         if not found[need]:
             fail('%s غير موجود في android/ النهائي' % need)
     log('✅ DIAG: ملفات native موجودة في android/ النهائي')

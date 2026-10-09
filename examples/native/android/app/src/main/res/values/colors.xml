@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- يستبدل colors.xml (حسب customFiles.replace) -->
+<resources>
+    <color name="dark_primary">#6c5ce7</color>
+    <color name="dark_bg">#0f0f1a</color>
+</resources>

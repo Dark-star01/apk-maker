@@ -1,0 +1,100 @@
+════════ NATIVE DIAG ════════
+cwd: /home/claude/music-video-maker
+native.enabled: True
+NATIVE SOURCE: native/android exists=True files=21
+   src  native/android/app/src/main/java/__APP_ID_PATH__/MainActivity.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/analysis/AudioAnalyzer.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/analysis/PcmAnalyzer.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/analysis/WaveData.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/audio/AudioEngine.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/bridge/BootDiag.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/bridge/MvmBridgePlugin.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/bridge/MvmDiagPlugin.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/AudioEnvelope.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/BackgroundMotion.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/DeterministicNoise.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/EffectEngine.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/EffectSettings.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/EffectState.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/Presets.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/media/AudioInspector.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/media/ImageInspector.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/media/MediaException.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/media/MediaManager.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/media/ProjectFiles.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/timeline/RenderState.kt
+   ⚠️ ملف Native في مكان غير متوقع: examples/native/android/app/src/main/java/__APP_ID_PATH__/MainActivity.kt
+ANDROID TARGET: android/app/src/main (java + manifest)
+   (android/app/src/main غير موجود بعد)
+MISSING MainActivity.kt in android/
+MISSING MainActivity.java in android/
+MISSING MvmBridgePlugin.kt in android/
+MISSING MvmDiagPlugin.kt in android/
+MISSING MediaManager.kt in android/
+MISSING AudioEngine.kt in android/
+MISSING AudioAnalyzer.kt in android/
+MISSING PcmAnalyzer.kt in android/
+MISSING WaveData.kt in android/
+MISSING EffectEngine.kt in android/
+MISSING AudioEnvelope.kt in android/
+════════════════════════════
+❌ MainActivity.kt لم يصل إلى android/ (المصدر موجود لكن النسخ لم يحدث)
+💡 راجع سجل خطوة 🧩 تطبيق ملفات Native
+════════ NATIVE DIAG ════════
+cwd: /home/claude/music-video-maker
+native.enabled: True
+NATIVE SOURCE: native/android exists=True files=31
+   src  native/android/app/src/main/java/__APP_ID_PATH__/MainActivity.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/analysis/AudioAnalyzer.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/analysis/PcmAnalyzer.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/analysis/WaveData.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/audio/AudioEngine.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/bridge/BootDiag.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/bridge/MvmBridgePlugin.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/bridge/MvmDiagPlugin.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/AudioEnvelope.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/BackgroundMotion.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/DeterministicNoise.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/EffectEngine.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/EffectSettings.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/EffectState.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/effects/Presets.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/media/AudioInspector.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/media/ImageInspector.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/media/MediaException.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/media/MediaManager.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/media/ProjectFiles.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/render/BackgroundLoader.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/render/FrameComposer.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/render/FrameGeometry.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/render/PlaybackClock.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/render/PreviewController.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/render/RenderLoop.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/render/Renderer.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/render/WaveGeometry.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/render/WaveOverlay.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/render/WaveSettings.kt
+   src  native/android/app/src/main/java/__APP_ID_PATH__/timeline/RenderState.kt
+   ⚠️ ملف Native في مكان غير متوقع: examples/native/android/app/src/main/java/__APP_ID_PATH__/MainActivity.kt
+ANDROID TARGET: android/app/src/main (java + manifest)
+   (android/app/src/main غير موجود بعد)
+MISSING MainActivity.kt in android/
+MISSING MainActivity.java in android/
+MISSING MvmBridgePlugin.kt in android/
+MISSING MvmDiagPlugin.kt in android/
+MISSING MediaManager.kt in android/
+MISSING AudioEngine.kt in android/
+MISSING AudioAnalyzer.kt in android/
+MISSING PcmAnalyzer.kt in android/
+MISSING WaveData.kt in android/
+MISSING EffectEngine.kt in android/
+MISSING AudioEnvelope.kt in android/
+MISSING Renderer.kt in android/
+MISSING RenderLoop.kt in android/
+MISSING PreviewController.kt in android/
+MISSING WaveGeometry.kt in android/
+MISSING WaveOverlay.kt in android/
+MISSING WaveSettings.kt in android/
+════════════════════════════
+❌ MainActivity.kt لم يصل إلى android/ (المصدر موجود لكن النسخ لم يحدث)
+💡 راجع سجل خطوة 🧩 تطبيق ملفات Native

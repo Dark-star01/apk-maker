@@ -137,3 +137,18 @@ ONE renderer. JS has no renderer and no clock: it tells native WHERE the preview
 - Project JSON lives in the WebView's localStorage (Phase 1 decision). Clearing app data wipes it and the media files together.
   The `store` interface lets us move it to a native file later without touching the UI.
 - The web code avoids newer JS syntax (`?.`, `??`) and has CSS fallbacks for `dvh`/`inset`, so it should also run on older WebViews.
+
+## Phase 6.5 — Native waveform overlay + essential UI fixes
+
+**Waveform overlay (Kotlin, inside `Renderer.kt`).** `Renderer.renderFrame` draws the background as before, then
+`WaveOverlay.draw(...)` in plain frame coordinates (not transformed like the picture). Three small files:
+- `WaveSettings.kt` – the project's `wave` settings (style line/bars/mirrored, colorMode, color, position, customY, reactive, reactTo, height, enabled) sanitized; `AdaptiveColor` (accent from the picture's average, computed once per picture).
+- `WaveGeometry.kt` – pure geometry (no Android classes, JVM-tested, reusable by Export). `layout(w,h,settings)` runs only when the frame size or settings change; `update(waveData, timeMs, settings)` fills preallocated arrays. The picture is a 2.4 s window of the cached `wave.data` around the playhead (series chosen by `reactTo`), linearly interpolated; outside the data the value is 0 (nothing invented). Everything is clamped inside the frame; stroke and bar sizes scale with the frame's short side; band height = `height` × frame height.
+- `WaveOverlay.kt` – owns Paint/Path, draws a thin dark outline pass + the coloured pass (anti-aliased, no blur/bloom). Exceptions are caught and reported in diagnostics; they never kill a frame.
+No data / overlay disabled → nothing is drawn. `reactive: false` → values 0 (flat minimal shape). Time comes from the same `PlaybackClock` as the effects, so pause freezes and seek updates at once. The data is the already-loaded `WaveData` of the effects path: no re-analysis, no per-frame I/O.
+
+**Bridge.** `setPreviewProject` additionally carries `wave` (the existing project settings). It is sent only when the payload changes (never per frame). `getRendererState` adds `waveStatus`, `waveStyle`, `waveError` (shown only in Settings → diagnostics).
+
+**Duplicate preview.** Two causes were removed: (1) the HTML thumbnail `<img>` inside `#preview` stayed visible under/next to the native view – it is now hidden (`.native-on`) while the native view is attached (it still provides the rectangle, border and label); (2) the rectangle conversion used `devicePixelRatio` and `webView.left/top`. Native now converts with the WebView's real scale (`webView.width / window.innerWidth`, sent as `viewportWidth`) and the WebView's real position relative to the TextureView's parent (`getLocationOnScreen` difference). No hard-coded offsets.
+
+**Navigation bar.** targetSdk 35 forces edge-to-edge, so the WebView extended under the system bars. `MainActivity.fitSystemBars()` applies the system-bar + cutout insets once, as margins of the WebView, and consumes them (the page gets none, so `env(safe-area-inset-*)` is 0 and the CSS does not apply them again). Bars stay visible; the area behind them is the app's dark colour; light status/navigation icons. Works for gesture and 3-button navigation because it uses the real inset values.

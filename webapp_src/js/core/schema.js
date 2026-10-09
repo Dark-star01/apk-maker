@@ -34,6 +34,7 @@ export function defaults() {
       background: null,
     },
     wave: {
+      enabled: true,
       style: 'mirrored',
       colorMode: 'manual',
       color: '#ffffff',
@@ -125,6 +126,7 @@ export function normalizeProject(raw) {
   p.schemaVersion = SCHEMA_VERSION;
   p.aspectRatio = pick(p.aspectRatio, Object.keys(ASPECTS), d.aspectRatio);
   p.resolution = pick(p.resolution, RESOLUTIONS, d.resolution);
+  p.wave.enabled = p.wave.enabled !== false;
   p.wave.style = pick(p.wave.style, WAVE_STYLES, d.wave.style);
   p.wave.position = pick(p.wave.position, WAVE_POSITIONS, d.wave.position);
   p.wave.colorMode = pick(p.wave.colorMode, WAVE_COLOR_MODES, d.wave.colorMode);

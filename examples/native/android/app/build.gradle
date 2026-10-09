@@ -1,0 +1,4 @@
+// يُدمج مع app/build.gradle الأصلي: يضيف الناقص فقط
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+}

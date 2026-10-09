@@ -1,0 +1,39 @@
+{
+  "appName": "اسم تطبيقك",
+  "appId": "com.dark.webapp",
+  "version": "1.0.0",
+  "capacitorVersion": "latest",
+  "native": {
+    "enabled": true,
+    "mode": "merge",
+    "kotlinVersion": "1.9.24",
+    "permissions": [
+      "android.permission.CAMERA",
+      "android.permission.VIBRATE"
+    ],
+    "extraDependencies": [
+      "androidx.core:core-ktx:1.12.0",
+      "androidx.work:work-runtime-ktx:2.9.0"
+    ],
+    "compose": {
+      "enabled": false,
+      "compilerVersion": "1.5.14",
+      "bomVersion": "2024.06.00"
+    },
+    "customFiles": {
+      "merge": ["AndroidManifest.xml", "build.gradle"],
+      "replace": ["MainActivity.kt", "colors.xml"]
+    }
+  },
+  "env": { "enabled": false, "vars": { "API_URL": "https://example.com" } },
+  "splash": {
+    "enabled": true,
+    "duration": 2500,
+    "backgroundColor": "#0f0f1a",
+    "textColor": "#a29bfe",
+    "accentColor": "#6c5ce7",
+    "subtitle": "",
+    "footer": "من تطوير دارك",
+    "logoFile": "logo.png"
+  }
+}

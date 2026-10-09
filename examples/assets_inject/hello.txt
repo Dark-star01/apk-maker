@@ -1,0 +1,1 @@
+هذا الملف يُنسخ إلى android/app/src/main/assets/ ويمكن قراءته من Kotlin عبر assets.open

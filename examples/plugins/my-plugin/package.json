@@ -1,0 +1,11 @@
+{
+  "name": "dark-my-plugin",
+  "version": "1.0.0",
+  "description": "مثال لبلاجن Capacitor مخصص (Kotlin)",
+  "files": ["android/", "src/"],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  }
+}

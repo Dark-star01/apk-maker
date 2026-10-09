@@ -11,6 +11,8 @@ cat "$T"/classes*.dex | strings | grep -q "PcmAnalyzer"     || fail "PcmAnalyzer
 cat "$T"/classes*.dex | strings | grep -q "EffectEngine"    || fail "EffectEngine missing from the APK dex"
 cat "$T"/classes*.dex | strings | grep -q "PreviewController" || fail "PreviewController missing from the APK dex"
 cat "$T"/classes*.dex | strings | grep -q "RenderLoop"      || fail "RenderLoop missing from the APK dex"
+cat "$T"/classes*.dex | strings | grep -q "WaveGeometry"     || fail "WaveGeometry missing from the APK dex"
+cat "$T"/classes*.dex | strings | grep -q "WaveOverlay"      || fail "WaveOverlay missing from the APK dex"
 cat "$T"/classes*.dex | strings | grep -q "AudioAnalyzer"    || fail "AudioAnalyzer missing from the APK dex"
 cat "$T"/classes*.dex | strings | grep -q "AudioEngine"     || fail "AudioEngine missing from the APK dex"
 cat "$T"/classes*.dex | strings | grep -q "MediaManager"     || fail "MediaManager missing from the APK dex"

@@ -8,6 +8,7 @@ fail() { echo "❌ MVM guard: $1"; exit 1; }
 [ -f "$DIR/bridge/MvmBridgePlugin.kt" ]  || fail "bridge/MvmBridgePlugin.kt missing"
 [ ! -f "$DIR/MainActivity.java" ]        || fail "default MainActivity.java still present (would shadow Kotlin one)"
 grep -q "registerPlugin(MvmBridgePlugin" "$DIR/MainActivity.kt" || fail "plugin not registered in MainActivity.kt"
+grep -q "setOnApplyWindowInsetsListener" "$DIR/MainActivity.kt" || fail "MainActivity.kt must apply the system-bar insets (bottom tabs would sit under the navigation bar)"
 grep -q '@CapacitorPlugin(name = "MvmBridge")' "$DIR/bridge/MvmBridgePlugin.kt" || fail "@CapacitorPlugin missing"
 if grep -rl "__APP_ID" "$DIR" >/dev/null 2>&1; then fail "unreplaced __APP_ID placeholder in Kotlin files"; fi
 grep -q "^package $APP_ID" "$DIR/MainActivity.kt" || fail "MainActivity package != appId"
@@ -16,5 +17,5 @@ echo "✅ MVM guard: native bridge files are in place ($(find "$DIR" -name '*.kt
 [ -f "$DIR/bridge/MvmDiagPlugin.kt" ] && [ -f "$DIR/bridge/BootDiag.kt" ] || { echo "❌ MVM guard: diag plugin files missing"; exit 1; }
 [ -f "$DIR/audio/AudioEngine.kt" ] || { echo "❌ MVM guard: audio/AudioEngine.kt missing"; exit 1; }
 for f in AudioAnalyzer PcmAnalyzer WaveData; do [ -f "$DIR/analysis/$f.kt" ] || { echo "❌ MVM guard: analysis/$f.kt missing"; exit 1; }; done
-for f in Renderer RenderLoop PreviewController FrameGeometry FrameComposer PlaybackClock BackgroundLoader; do [ -f "$DIR/render/$f.kt" ] || { echo "❌ MVM guard: render/$f.kt missing"; exit 1; }; done
+for f in Renderer RenderLoop PreviewController FrameGeometry FrameComposer PlaybackClock BackgroundLoader WaveGeometry WaveOverlay WaveSettings; do [ -f "$DIR/render/$f.kt" ] || { echo "❌ MVM guard: render/$f.kt missing"; exit 1; }; done
 for f in EffectEngine EffectSettings EffectState AudioEnvelope BackgroundMotion DeterministicNoise Presets; do [ -f "$DIR/effects/$f.kt" ] || { echo "❌ MVM guard: effects/$f.kt missing"; exit 1; }; done

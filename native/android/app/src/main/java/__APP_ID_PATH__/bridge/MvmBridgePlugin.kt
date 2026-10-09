@@ -21,6 +21,10 @@ import __APP_ID__.media.MediaException
 import __APP_ID__.media.MediaManager
 import __APP_ID__.render.PreviewConfig
 import __APP_ID__.render.PreviewController
+import __APP_ID__.render.WavePosition
+import __APP_ID__.render.WaveSettings
+import __APP_ID__.render.WaveSource
+import __APP_ID__.render.WaveStyle
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -470,6 +474,21 @@ class MvmBridgePlugin : Plugin() {
         )
     }
 
+    private fun parseWave(call: PluginCall): WaveSettings {
+        val w = call.getObject("wave") ?: return WaveSettings(enabled = false)
+        return WaveSettings(
+            enabled = w.optBoolean("enabled", true),
+            style = WaveStyle.fromWire(w.optString("style")),
+            adaptive = w.optString("colorMode") == "adaptive",
+            color = WaveSettings.parseColor(w.optString("color")),
+            position = WavePosition.fromWire(w.optString("position")),
+            customY = w.optDouble("customY", 0.8),
+            reactive = w.optBoolean("reactive", true),
+            source = WaveSource.fromWire(w.optString("reactTo")),
+            height = w.optDouble("height", 0.18),
+        )
+    }
+
     /** The cached wave data of [file] (null if none yet). Caller holds [effectLock]. Never analyses. */
     private fun waveForLocked(projectId: String, file: String?): WaveData? {
         val key = if (file.isNullOrBlank()) null else "$projectId|$file"
@@ -519,7 +538,7 @@ class MvmBridgePlugin : Plugin() {
             val bgName = call.getString("background")
             val bg = if (bgName.isNullOrBlank()) null else media.resolve(projectId, bgName) ?: java.io.File(media.analysisFile(projectId).parentFile, "missing_" + bgName)
             val wave = synchronized(effectLock) { waveForLocked(projectId, call.getString("audioFile")) }
-            preview.setProject(PreviewConfig(settings, wave, durationMs, bg))
+            preview.setProject(PreviewConfig(settings, wave, durationMs, bg, parseWave(call)))
             call.resolve(okJs())
         } catch (t: Throwable) {
             fail(call, t)
@@ -540,6 +559,8 @@ class MvmBridgePlugin : Plugin() {
             o.put("frames", d.frames); o.put("drawMs", d.drawMs)
             o.put("imageW", d.imageW); o.put("imageH", d.imageH)
             o.put("background", d.background); o.put("audioReactive", d.reactive)
+            o.put("waveStatus", d.waveStatus); o.put("waveStyle", d.waveStyle)
+            if (d.waveError != null) o.put("waveError", d.waveError)
             if (d.error != null) o.put("error", d.error)
         }
         call.resolve(o)
@@ -579,11 +600,23 @@ class MvmBridgePlugin : Plugin() {
             val w = call.getDouble("width") ?: 0.0
             val h = call.getDouble("height") ?: 0.0
             val show = call.getBoolean("visible") ?: true
+            val vw = call.getDouble("viewportWidth") ?: 0.0
             if (w <= 0 || h <= 0 || dpr <= 0) throw MediaException(MediaException.BAD_REQUEST, "bad preview rectangle")
             activity.runOnUiThread {
                 try {
                     val wv = bridge.webView
-                    block(wv, (wv.left + x * dpr).toFloat(), (wv.top + y * dpr).toFloat(), Math.round(w * dpr).toInt(), Math.round(h * dpr).toInt(), show)
+                    // CSS px -> device px with the REAL scale of this WebView (its pixel width / the page's CSS viewport width), so a
+                    // display-size / zoom setting can never put the native view somewhere else than the page's #preview.
+                    val k = if (vw > 0 && wv.width > 0) wv.width / vw else dpr
+                    // Origin: where the WebView really is inside the view that will hold the TextureView (insets, margins).
+                    val p = wv.parent as? android.view.View
+                    var ox = wv.left.toFloat(); var oy = wv.top.toFloat()
+                    if (p != null && p.width > 0) {
+                        val a = IntArray(2); val b = IntArray(2)
+                        wv.getLocationOnScreen(a); p.getLocationOnScreen(b)
+                        ox = (a[0] - b[0]).toFloat(); oy = (a[1] - b[1]).toFloat()
+                    }
+                    block(wv, (ox + x * k).toFloat(), (oy + y * k).toFloat(), Math.round(w * k).toInt(), Math.round(h * k).toInt(), show)
                     call.resolve(okJs())
                 } catch (t: Throwable) { fail(call, t) }
             }

@@ -142,3 +142,6 @@ select { flex: 1; min-width: 0; max-width: 60%; min-height: 40px; border-radius:
 .fx-row .value { font-variant-numeric: tabular-nums; }
 .meter { flex: 1; max-width: 60%; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .meter i { display: block; height: 100%; width: 0; background: var(--accent); }
+
+/* Phase 6.5: the native view owns the picture; the HTML stand-in is hidden (it still provides the rectangle). */
+.preview-frame.native-on img { visibility: hidden; }

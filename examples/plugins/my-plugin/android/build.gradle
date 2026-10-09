@@ -1,0 +1,26 @@
+// وحدة مكتبة أندرويد للبلاجن. لا نضع buildscript هنا:
+// أداة البناء تضيف AGP و Kotlin و darkJava في build.gradle الجذر تلقائياً.
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+android {
+    namespace "com.dark.plugin"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+    }
+    compileOptions {
+        sourceCompatibility rootProject.ext.darkJava
+        targetCompatibility rootProject.ext.darkJava
+    }
+    kotlinOptions {
+        jvmTarget = rootProject.ext.darkJava.toString()
+    }
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+}

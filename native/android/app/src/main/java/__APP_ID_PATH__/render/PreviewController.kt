@@ -25,6 +25,7 @@ internal class PreviewConfig(
     val wave: WaveData?,
     val durationMs: Long,
     val background: File?,
+    val waveSettings: WaveSettings = WaveSettings(enabled = false),
 )
 
 /**
@@ -178,6 +179,7 @@ internal class PreviewController(
     fun setProject(cfg: PreviewConfig) {
         lastConfig = cfg
         renderer.setEffects(cfg.settings, cfg.wave, cfg.durationMs)
+        renderer.setWaveSettings(cfg.waveSettings)
         loadBackground(cfg.background, Math.max(viewW, viewH))
         loop.requestFrame()
     }
@@ -269,6 +271,7 @@ internal class PreviewController(
         val renderer: String, val surface: String, val frame: String, val timeMs: Double,
         val fps: Int, val targetFps: Int, val frames: Long, val drawMs: Double,
         val imageW: Int, val imageH: Int, val background: String, val reactive: Boolean, val error: String?,
+        val waveStatus: String, val waveStyle: String, val waveError: String?,
     )
 
     fun diag(): Diag {
@@ -284,6 +287,7 @@ internal class PreviewController(
             surface = surfaceState, frame = frame, timeMs = loop.lastTimeMs, fps = loop.measuredFps, targetFps = loop.fps,
             frames = loop.framesDrawn, drawMs = loop.lastDrawMs, imageW = renderer.imageW, imageH = renderer.imageH,
             background = renderer.background.name, reactive = renderer.hasWave, error = err,
+            waveStatus = renderer.waveStatus, waveStyle = renderer.waveStyle, waveError = renderer.waveError,
         )
     }
 

@@ -40,6 +40,15 @@ internal class Renderer {
     @Volatile var hasWave = false
         private set
 
+    // Waveform overlay (Phase 6.5): drawn after the picture, in untransformed frame coordinates.
+    private var waveSettings = WaveSettings(enabled = false)
+    private var waveData: WaveData? = null
+    private var adaptiveColor = -1
+    private val overlay = WaveOverlay()
+    @Volatile var waveStatus = "off"
+        private set
+    val waveError: String? get() = overlay.lastError
+
     private val composer = FrameComposer()
     private val matrix = Matrix()
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
@@ -64,13 +73,32 @@ internal class Renderer {
     /** New effect settings and/or wave data (cheap: the engine is rebuilt only here, never per frame). */
     fun setEffects(settings: EffectSettings, wave: WaveData?, durationMs: Long) {
         val e = EffectEngine(settings, wave, durationMs)
-        synchronized(lock) { engine = e; hasWave = e.hasWave }
+        synchronized(lock) { engine = e; hasWave = e.hasWave; waveData = wave; updateWaveStatus() }
+    }
+
+    /** Overlay settings (cheap; the geometry is rebuilt lazily, only when the frame or these settings change). */
+    fun setWaveSettings(s: WaveSettings) {
+        synchronized(lock) { waveSettings = s; updateWaveStatus() }
+    }
+
+    @Volatile var waveStyle = "-"
+        private set
+
+    private fun updateWaveStatus() {
+        waveStyle = waveSettings.style.wire
+        waveStatus = when {
+            !waveSettings.enabled -> "off"
+            waveData == null -> "no data"
+            else -> "on"
+        }
     }
 
     /** Takes ownership of [bmp] (recycled when replaced or released). Null + a status explains why there is no picture. */
     fun setBackground(bmp: Bitmap?, status: Background) {
         val old: Bitmap?
+        val tint = if (bmp != null && !bmp.isRecycled) averageTint(bmp) else -1
         synchronized(lock) {
+            adaptiveColor = tint
             old = bitmap
             bitmap = bmp
             background = status
@@ -94,9 +122,22 @@ internal class Renderer {
             } else {
                 drawMessage(canvas, w, h)
             }
+            overlay.draw(canvas, w, h, timeMs, waveData, waveSettings, adaptiveColor)
             lastState = p.state
             return p.state
         }
+    }
+
+    /** Accent colour from a coarse 12x12 sample of the picture (once per picture, never per frame). */
+    private fun averageTint(bmp: Bitmap): Int {
+        return try {
+            var r = 0L; var g = 0L; var b = 0L; var k = 0
+            for (iy in 0 until 12) for (ix in 0 until 12) {
+                val px = bmp.getPixel((bmp.width - 1) * ix / 11, (bmp.height - 1) * iy / 11)
+                r += (px shr 16) and 0xFF; g += (px shr 8) and 0xFF; b += px and 0xFF; k++
+            }
+            AdaptiveColor.fromAverage((r / k).toInt(), (g / k).toInt(), (b / k).toInt())
+        } catch (e: Throwable) { -1 }
     }
 
     private fun drawMessage(canvas: Canvas, w: Int, h: Int) {
