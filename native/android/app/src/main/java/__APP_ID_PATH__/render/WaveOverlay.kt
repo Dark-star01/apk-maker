@@ -24,13 +24,15 @@ internal class WaveOverlay {
         outline.strokeJoin = Paint.Join.ROUND; outline.strokeCap = Paint.Cap.ROUND
     }
 
-    fun draw(canvas: Canvas, w: Int, h: Int, timeMs: Double, data: WaveData?, s: WaveSettings, adaptiveColor: Int) {
+    fun draw(canvas: Canvas, w: Int, h: Int, timeMs: Double, data: WaveData?, s: WaveSettings, adaptiveColor: Int, alpha: Float = 1f) {
         if (!s.enabled || data == null) return // nothing to show: draw nothing, invent nothing
         try {
             geo.layout(w, h, s)
             if (geo.n == 0) return
             geo.update(data, timeMs, s)
-            fill.color = if (s.adaptive) adaptiveColor else s.color
+            val base = if (s.adaptive) adaptiveColor else s.color
+            fill.color = if (alpha >= 1f) base else (base and 0x00FFFFFF) or ((((base ushr 24) * alpha).toInt().coerceIn(0, 255)) shl 24)
+            outline.color = if (alpha >= 1f) 0x73000000 else ((0x73 * alpha).toInt().coerceIn(0, 255) shl 24)
             val c = geo.coords
             val edge = Math.max(1f, geo.stroke * 0.35f)
             if (geo.style == WaveStyle.LINE) {

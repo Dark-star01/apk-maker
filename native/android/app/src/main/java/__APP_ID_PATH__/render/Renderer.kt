@@ -11,6 +11,8 @@ import __APP_ID__.analysis.WaveData
 import __APP_ID__.effects.EffectEngine
 import __APP_ID__.effects.EffectSettings
 import __APP_ID__.effects.EffectState
+import __APP_ID__.scene.Scene
+import __APP_ID__.scene.SceneOverlay
 
 /**
  * THE renderer: draws one complete frame for a given timestamp onto any Canvas of any size.
@@ -45,6 +47,10 @@ internal class Renderer {
     private var waveData: WaveData? = null
     private var adaptiveColor = -1
     private val overlay = WaveOverlay()
+    // Dark Studio scene (layers of waves + text). When set it replaces the single legacy overlay above.
+    private var scene: Scene? = null
+    private val sceneOverlay = SceneOverlay()
+    private var durationMs = 0L
     @Volatile var waveStatus = "off"
         private set
     val waveError: String? get() = overlay.lastError
@@ -71,10 +77,17 @@ internal class Renderer {
     }
 
     /** New effect settings and/or wave data (cheap: the engine is rebuilt only here, never per frame). */
-    fun setEffects(settings: EffectSettings, wave: WaveData?, durationMs: Long) {
-        val e = EffectEngine(settings, wave, durationMs)
-        synchronized(lock) { engine = e; hasWave = e.hasWave; waveData = wave; updateWaveStatus() }
+    fun setEffects(settings: EffectSettings, wave: WaveData?, durationMs0: Long) {
+        val e = EffectEngine(settings, wave, durationMs0)
+        synchronized(lock) { engine = e; hasWave = e.hasWave; waveData = wave; durationMs = durationMs0; updateWaveStatus() }
     }
+
+    /** The layered scene (null = classic single overlay). Cheap; caches inside are rebuilt lazily. */
+    fun setScene(s: Scene?) {
+        synchronized(lock) { scene = s; sceneOverlay.reset(); updateWaveStatus() }
+    }
+
+    val sceneError: String? get() = sceneOverlay.lastError
 
     /** Overlay settings (cheap; the geometry is rebuilt lazily, only when the frame or these settings change). */
     fun setWaveSettings(s: WaveSettings) {
@@ -87,6 +100,7 @@ internal class Renderer {
     private fun updateWaveStatus() {
         waveStyle = waveSettings.style.wire
         waveStatus = when {
+            scene != null -> if (waveData == null) "scene (no data)" else "scene"
             !waveSettings.enabled -> "off"
             waveData == null -> "no data"
             else -> "on"
@@ -122,7 +136,9 @@ internal class Renderer {
             } else {
                 drawMessage(canvas, w, h)
             }
-            overlay.draw(canvas, w, h, timeMs, waveData, waveSettings, adaptiveColor)
+            val sc = scene
+            if (sc != null) sceneOverlay.draw(canvas, w, h, timeMs, durationMs, waveData, sc, adaptiveColor)
+            else overlay.draw(canvas, w, h, timeMs, waveData, waveSettings, adaptiveColor)
             lastState = p.state
             return p.state
         }

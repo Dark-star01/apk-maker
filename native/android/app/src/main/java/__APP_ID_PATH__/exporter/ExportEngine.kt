@@ -27,6 +27,7 @@ internal class ExportRequest(
     val fps: Int,
     val audioDurationMsHint: Long,
     val outDir: File,
+    val scene: __APP_ID__.scene.Scene? = null,
 )
 
 /** Thrown when an encoder candidate cannot be configured/started (before any frame is submitted): the next candidate is tried. */
@@ -79,6 +80,7 @@ internal class ExportEngine(private val job: ExportJob) {
             renderer = r
             r.setEffects(req.settings, req.wave, req.audioDurationMsHint)
             r.setWaveSettings(req.waveSettings)
+            r.setScene(req.scene)
             r.setBackground(loaded.bitmap, Renderer.Background.READY)
 
             // 1) audio

@@ -166,3 +166,19 @@ Package `exporter/` (Kotlin). JS only starts/cancels/polls (`startExport`, `canc
 **Finish.** muxer.stop -> unique name (`Title.mp4`, `Title (2).mp4`, never overwriting) in `projects/<id>/exports/` -> `ExportValidator` re-opens with MediaExtractor (tracks, size, durations, first samples readable; `ExportValidation` tolerances) -> only then `completed`. Failure/cancel deletes temp files and any unvalidated output. Backgrounding pauses the job (foreground-only); screen kept on while exporting. Share/Open copy the file to Movies/Music Video Maker via MediaStore (Android 10+, no permission).
 
 Sizes: short side 360/420/720 (same as `outputSize()` in schema.js): 16:9 640×360, 746×420, 1280×720; 9:16 reversed; 1:1 360², 420², 720². An encoder-aligned size is reported as the actual size if the device needs one.
+
+## Dark Studio — Stage A/B (scene engine)
+
+Goal: a layered scene (waves + text) on top of the background, drawn by the SAME `Renderer` for Preview and Export, so anything
+the user adds reaches the video without touching the export engine (its only change: it forwards `scene` to its own Renderer).
+
+- `scene/SceneModel.kt` — immutable `Scene` of ordered `Layer`s (`WaveLayer`, `TextLayer`), all numbers clamped. First layer = bottom.
+- `scene/SceneParser.kt` — plain tree (Map/List) -> Scene; sanitizing, max 24 layers, text capped at 600 chars. No org.json (JVM-testable).
+- `scene/WaveShapes.kt` — pure geometry of 7 new shapes (neonBars, radial, ring, ribbon, dots, spectrumMirror, glowLine); the 3 original
+  shapes (line, bars, mirrored) still use the untouched `WaveGeometry`/`WaveOverlay` (which only gained an optional alpha).
+  "Spectrum" shapes map bass -> mid -> treble across positions: a 3-band approximation, NOT an FFT.
+- `scene/TextLayoutEngine.kt`, `TextAnimator.kt` — word-level layout with RTL, in/out animations, word/char reveal. Pure.
+- `scene/ShapeOverlay.kt`, `TextOverlay.kt`, `SceneOverlay.kt` — Android drawing (glow = extra wide faint passes, manual shadow, system fonts only).
+- Bridge: `setPreviewProject` and `startExport` accept an optional `scene`; without it nothing changes (legacy `wave` overlay).
+- Tests: `tests/jvm/run.sh` (logic, 569 checks) and `tests/jvm/compilecheck.sh` (type-check + smoke run against android.graphics STUBS,
+  not the real SDK). Both need `kotlinc` 1.9.x. Neither replaces a real APK build and an on-device test.

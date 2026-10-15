@@ -26,6 +26,7 @@ internal class PreviewConfig(
     val durationMs: Long,
     val background: File?,
     val waveSettings: WaveSettings = WaveSettings(enabled = false),
+    val scene: __APP_ID__.scene.Scene? = null,
 )
 
 /**
@@ -180,6 +181,7 @@ internal class PreviewController(
         lastConfig = cfg
         renderer.setEffects(cfg.settings, cfg.wave, cfg.durationMs)
         renderer.setWaveSettings(cfg.waveSettings)
+        renderer.setScene(cfg.scene)
         loadBackground(cfg.background, Math.max(viewW, viewH))
         loop.requestFrame()
     }

@@ -483,6 +483,19 @@ class MvmBridgePlugin : Plugin() {
         )
     }
 
+    /** `scene` (layers of waves + text) as a plain tree for the pure SceneParser; null when the project has none. */
+    private fun parseScene(call: PluginCall): __APP_ID__.scene.Scene? {
+        val raw = call.getObject("scene") ?: return null
+        return __APP_ID__.scene.SceneParser.parse(plain(raw))
+    }
+
+    private fun plain(v: Any?): Any? = when (v) {
+        is org.json.JSONObject -> HashMap<String, Any?>().also { m -> val keys = v.keys(); while (keys.hasNext()) { val k = keys.next(); m[k] = plain(v.opt(k)) } }
+        is org.json.JSONArray -> ArrayList<Any?>().also { l -> for (i in 0 until v.length()) l.add(plain(v.opt(i))) }
+        org.json.JSONObject.NULL -> null
+        else -> v
+    }
+
     private fun parseWave(call: PluginCall): WaveSettings {
         val w = call.getObject("wave") ?: return WaveSettings(enabled = false)
         return WaveSettings(
@@ -547,7 +560,7 @@ class MvmBridgePlugin : Plugin() {
             val bgName = call.getString("background")
             val bg = if (bgName.isNullOrBlank()) null else media.resolve(projectId, bgName) ?: java.io.File(media.analysisFile(projectId).parentFile, "missing_" + bgName)
             val wave = synchronized(effectLock) { waveForLocked(projectId, call.getString("audioFile")) }
-            preview.setProject(PreviewConfig(settings, wave, durationMs, bg, parseWave(call)))
+            preview.setProject(PreviewConfig(settings, wave, durationMs, bg, parseWave(call), parseScene(call)))
             call.resolve(okJs())
         } catch (t: Throwable) {
             fail(call, t)
@@ -622,6 +635,7 @@ class MvmBridgePlugin : Plugin() {
                 settings = settings, waveSettings = waveSettings, aspect = call.getString("aspectRatio") ?: "16:9",
                 resolution = call.getString("resolution") ?: "720p", fps = call.getInt("fps") ?: 30,
                 audioDurationMsHint = call.getDouble("durationMs")?.toLong() ?: 0L, outDir = java.io.File(dir, "exports"),
+                scene = parseScene(call),
             )
             val job = ExportJob()
             exportJob = job
