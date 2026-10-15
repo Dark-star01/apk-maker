@@ -4,7 +4,7 @@ import { state, mutate, setProject } from './state.js';
 import { store } from '../core/store.js';
 import { bridge } from '../core/bridge.js';
 import { MSG } from './messages.js';
-import { ASPECTS, RESOLUTIONS, newProject, outputSize } from '../core/schema.js';
+import { ASPECTS, newProject } from '../core/schema.js';
 
 export function closeSheet() {
   const o = $('#overlay');
@@ -12,7 +12,7 @@ export function closeSheet() {
   clear(o);
 }
 
-function openSheet(...children) {
+export function openSheet(...children) {
   const o = $('#overlay');
   clear(o);
   o.onclick = (e) => { if (e.target === o) closeSheet(); };
@@ -100,31 +100,4 @@ export async function openProjects() {
     h('div', { class: 'actions' },
       h('button', { class: 'btn', type: 'button', onclick: closeSheet }, 'Close'),
       h('button', { class: 'btn accent', type: 'button', onclick: () => openNewProject() }, 'New project')));
-}
-
-// ── Export options (the actual export arrives in a later phase) ──
-export function openExport() {
-  const p = state.project;
-  const body = h('div', {});
-  const render = () => {
-    clear(body);
-    const size = outputSize(p.aspectRatio, p.resolution);
-    body.append(
-      h('div', { class: 'hint' }, 'Resolution'),
-      h('div', { class: 'seg' }, RESOLUTIONS.map((r) =>
-        h('button', {
-          type: 'button', class: r === p.resolution ? 'on' : '',
-          onclick: () => { mutate((x) => { x.resolution = r; }); render(); },
-        }, r))),
-      h('div', { class: 'hint', style: { marginTop: '10px' } },
-        `${p.aspectRatio} · ${size.width}×${size.height} · ${p.fps} fps · H.264 + AAC (MP4)`));
-  };
-  render();
-
-  openSheet(
-    h('h2', {}, 'Export'),
-    body,
-    h('div', { class: 'actions' },
-      h('button', { class: 'btn', type: 'button', onclick: closeSheet }, 'Close'),
-      h('button', { class: 'btn accent', type: 'button', onclick: () => toast(MSG.exportLater) }, 'Export')));
 }

@@ -19,6 +19,11 @@ import __APP_ID__.effects.MotionMode
 import __APP_ID__.effects.Preset
 import __APP_ID__.media.MediaException
 import __APP_ID__.media.MediaManager
+import __APP_ID__.exporter.ExportEngine
+import __APP_ID__.exporter.ExportException
+import __APP_ID__.exporter.ExportJob
+import __APP_ID__.exporter.ExportRequest
+import __APP_ID__.exporter.ExportShare
 import __APP_ID__.render.PreviewConfig
 import __APP_ID__.render.PreviewController
 import __APP_ID__.render.WavePosition
@@ -57,6 +62,10 @@ class MvmBridgePlugin : Plugin() {
             previewRef?.onPlayback(snap.state == AudioEngine.State.PLAYING) // the native Preview follows the same state
         }
     }
+    // Export (Phase 7): one job at a time, on its own thread (never the UI thread, never the preview's render thread)
+    private val exportIo: ExecutorService = Executors.newSingleThreadExecutor { r -> Thread(r, "mvm-export") }
+    private val exportBusy = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var exportJob: ExportJob? = null
     @Volatile private var previewRef: PreviewController? = null
     private val preview: PreviewController
         get() = previewRef ?: synchronized(this) { previewRef ?: PreviewController(context, engine.clock, io).also { previewRef = it } }
@@ -589,6 +598,93 @@ class MvmBridgePlugin : Plugin() {
         }
     }
 
+    // ── Export (Phase 7) ────────────────────────────────────────────────────
+    // JS: await ...startExport({ projectId, title, background, audioFile, durationMs, effects, aspect, aspectRatio, wave, resolution, fps })
+    //     -> { ok: true } at once; the work runs on "mvm-export". Poll getExportState() (about once a second).
+    @PluginMethod
+    fun startExport(call: PluginCall) {
+        if (!exportBusy.compareAndSet(false, true)) { call.reject("An export is already running", ExportException.BUSY); return }
+        var started = false
+        try {
+            val projectId = call.getString("projectId") ?: throw ExportException(ExportException.BAD_REQUEST, "projectId is required")
+            val settings = parseEffects(call)
+            val waveSettings = parseWave(call)
+            val dir = media.analysisFile(projectId).parentFile ?: throw ExportException(ExportException.BAD_REQUEST, "bad project")
+            fun named(key: String): java.io.File? {
+                val n = call.getString(key)
+                if (n.isNullOrBlank()) return null
+                return media.resolve(projectId, n) ?: java.io.File(dir, "missing_$n")
+            }
+            val audioName = call.getString("audioFile")
+            val wave = synchronized(effectLock) { waveForLocked(projectId, audioName) }
+            val req = ExportRequest(
+                title = call.getString("title"), background = named("background"), audio = named("audioFile"), wave = wave,
+                settings = settings, waveSettings = waveSettings, aspect = call.getString("aspectRatio") ?: "16:9",
+                resolution = call.getString("resolution") ?: "720p", fps = call.getInt("fps") ?: 30,
+                audioDurationMsHint = call.getDouble("durationMs")?.toLong() ?: 0L, outDir = java.io.File(dir, "exports"),
+            )
+            val job = ExportJob()
+            exportJob = job
+            engine.runOnMain { engine.pauseIfPlaying() }          // export is independent of playback; keep the CPU for it
+            activity.runOnUiThread { activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+            exportIo.execute {
+                try { ExportEngine(job).run(req) }
+                finally {
+                    exportBusy.set(false)
+                    try { activity.runOnUiThread { activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } } catch (e: Throwable) { }
+                }
+            }
+            started = true
+            call.resolve(okJs())
+        } catch (t: Throwable) {
+            if (!started) exportBusy.set(false)
+            fail(call, t)
+        }
+    }
+
+    // JS: await ...cancelExport()
+    @PluginMethod
+    fun cancelExport(call: PluginCall) { exportJob?.cancel(); exportJob?.setPaused(false); call.resolve(okJs()) }
+
+    // JS: await ...getExportState() -> { state, percent, frame, frames, width, height, fps, outputPath?, outputName?, sizeBytes?, durationMs?, errorCode?, errorMessage?, detail? }
+    @PluginMethod
+    fun getExportState(call: PluginCall) {
+        val s = exportJob?.snapshot()
+        val o = JSObject()
+        if (s == null) { o.put("state", "idle"); o.put("percent", 0); call.resolve(o); return }
+        o.put("state", s.stage.wire); o.put("percent", s.percent); o.put("frame", s.frame); o.put("frames", s.frames)
+        o.put("width", s.width); o.put("height", s.height); o.put("fps", s.fps)
+        if (s.outputPath != null) { o.put("outputPath", s.outputPath); o.put("outputName", s.outputName); o.put("sizeBytes", s.sizeBytes); o.put("durationMs", s.durationMs) }
+        if (s.errorCode != null) { o.put("errorCode", s.errorCode); o.put("errorMessage", s.errorMessage) }
+        if (s.detail != null) o.put("detail", s.detail)
+        call.resolve(o)
+    }
+
+    // JS: await ...shareExport({ path }) / openExport({ path })  (path must be a finished export of this app)
+    @PluginMethod fun shareExport(call: PluginCall) = viewExport(call, true)
+    @PluginMethod fun openExport(call: PluginCall) = viewExport(call, false)
+
+    private fun viewExport(call: PluginCall, share: Boolean) {
+        io.execute {
+            try {
+                val f = java.io.File(call.getString("path") ?: throw ExportException(ExportException.BAD_REQUEST, "path is required")).canonicalFile
+                val root = java.io.File(context.filesDir, "projects").canonicalFile
+                if (!f.path.startsWith(root.path + java.io.File.separator) || f.parentFile?.name != "exports" || !f.name.endsWith(".mp4") || !f.isFile)
+                    throw ExportException(ExportException.BAD_REQUEST, "Not an export of this app")
+                val uri = ExportShare.publish(context, f)
+                activity.runOnUiThread {
+                    try {
+                        val i = if (share) android.content.Intent(android.content.Intent.ACTION_SEND).setType("video/mp4").putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                        else android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, "video/mp4")
+                        i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        activity.startActivity(if (share) android.content.Intent.createChooser(i, "Share video") else i)
+                        call.resolve(okJs())
+                    } catch (t: Throwable) { call.reject("No app can handle this video", "EXPORT_NO_APP") }
+                }
+            } catch (t: Throwable) { fail(call, t) }
+        }
+    }
+
     private fun okJs(): JSObject { val o = JSObject(); o.put("ok", true); return o }
 
     // Runs a view command on the UI thread with the rectangle converted from CSS px to device px.
@@ -628,7 +724,9 @@ class MvmBridgePlugin : Plugin() {
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private fun fail(call: PluginCall, t: Throwable) {
-        if (t is MediaException) {
+        if (t is ExportException) {
+            call.reject(t.message, t.code, t)
+        } else if (t is MediaException) {
             call.reject(t.message, t.code, t)
         } else {
             Log.e(TAG, "Unexpected bridge error", t)
@@ -639,12 +737,14 @@ class MvmBridgePlugin : Plugin() {
     // No background playback service in the MVP: leaving the app pauses the audio.
     override fun handleOnPause() {
         engine.runOnMain { engine.pauseIfPlaying() }
+        exportJob?.setPaused(true)             // export is foreground-only: it waits (no work lost) until the app is back
         previewRef?.onActivityPause()
         super.handleOnPause()
     }
 
     override fun handleOnResume() {
         super.handleOnResume()
+        exportJob?.setPaused(false)
         previewRef?.onActivityResume()
     }
 
@@ -652,6 +752,8 @@ class MvmBridgePlugin : Plugin() {
         previewRef?.release()
         previewRef = null
         analysisGen.incrementAndGet()
+        exportJob?.cancel(); exportJob?.setPaused(false)
+        exportIo.shutdown()
         analysisIo.shutdown()
         engine.runOnMain { engine.release(silent = true) }
         io.shutdown()

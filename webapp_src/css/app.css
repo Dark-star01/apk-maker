@@ -145,3 +145,9 @@ select { flex: 1; min-width: 0; max-width: 60%; min-height: 40px; border-radius:
 
 /* Phase 6.5: the native view owns the picture; the HTML stand-in is hidden (it still provides the rectangle). */
 .preview-frame.native-on img { visibility: hidden; }
+
+/* Export (Phase 7) */
+.export-status { margin-top: 12px; }
+.export-label { font-weight: 600; margin-bottom: 6px; }
+.export-bar { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+.export-fill { height: 100%; background: var(--accent); transition: width .4s linear; }

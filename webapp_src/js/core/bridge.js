@@ -148,6 +148,16 @@ export const bridge = {
   // Renders timeMs twice (and otherMs once) offscreen with the real Renderer: { identical, crcA, crcB, crcOther, ... }
   rendererSelfTest(args) { return call('rendererSelfTest', args); },
 
+  // ── Export (Phase 7: Kotlin renders with the shared Renderer and encodes with MediaCodec; JS starts, polls and cancels) ──
+  // startExport resolves at once ({ ok }); the work runs natively. Poll getExportState() about once a second:
+  // { state: idle|preparing|encodingAudio|rendering|finalizing|completed|failed|cancelled, percent, frame, frames, width, height, fps,
+  //   outputPath?, outputName?, sizeBytes?, durationMs?, errorCode?, errorMessage?, detail? }   No frame ever crosses the bridge.
+  startExport(p) { return call('startExport', p); },
+  cancelExport() { return call('cancelExport'); },
+  getExportState() { return call('getExportState'); },
+  shareExport(path) { return call('shareExport', { path }); },
+  openExport(path) { return call('openExport', { path }); },
+
   async removeMedia(projectId, kind) {
     if (!plugin()) return;
     await call('removeMedia', { projectId, kind });

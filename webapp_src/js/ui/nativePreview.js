@@ -33,7 +33,7 @@ function setNative(on) {
   if (el) el.classList.toggle('native-on', !!on);
 }
 
-function projectPayload(project) {
+export function projectPayload(project) {
   const a = project.media.audio;
   const b = project.media.background;
   const [aw, ah] = ASPECTS[project.aspectRatio] || ASPECTS['16:9'];
