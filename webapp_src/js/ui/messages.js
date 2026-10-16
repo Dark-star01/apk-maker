@@ -26,7 +26,7 @@ const ERRORS = {
   PLAYER_FAILED: 'توقف المشغّل بسبب خطأ. اضغط تشغيل للمحاولة مرة أخرى.',
   NO_AUDIO: MSG.noAudio,
   ANALYSIS_UNSUPPORTED: 'تعذر تحليل هذا الملف الصوتي، لذلك لن تظهر الموجة. التشغيل يعمل بشكل طبيعي.',
-  ANALYSIS_FAILED: 'فشل تحليل الصوت. يمكنك إعادة المحاولة من تبويب Wave.',
+  ANALYSIS_FAILED: 'فشل تحليل الصوت. يمكنك إعادة المحاولة من تبويب الوسائط.',
   NO_NATIVE: MSG.needNative,
   EXPORT_BUSY: 'هناك عملية تصدير قيد التنفيذ بالفعل.',
   EXPORT_BAD_REQUEST: 'تعذر بدء التصدير: بيانات المشروع غير صالحة.',

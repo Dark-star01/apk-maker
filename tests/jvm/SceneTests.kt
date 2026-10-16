@@ -134,6 +134,9 @@ fun main() {
         check("words reveal progressively", TextAnimator.frame(wd, 0.0, 9000, 4, f).revealed == 0.0 && TextAnimator.frame(wd, 500.0, 9000, 4, f).revealed == 2.0 && TextAnimator.frame(wd, 2000.0, 9000, 4, f).revealed == 4.0)
         check("unit alpha fades one by one", TextAnimator.unitAlpha(1.5, 0) == 1.0 && TextAnimator.unitAlpha(1.5, 1) == 0.5 && TextAnimator.unitAlpha(1.5, 2) == 0.0)
         val open = TextLayer("o", text = "x", startMs = 0, endMs = 0, outMs = 500)
+        val tiny = TextLayer("tiny", text = "x", startMs = 1000, endMs = 1200, inMs = 400, outMs = 300)
+        check("short line is fully visible in its middle (animations capped to half the span)", TextAnimator.frame(tiny, 1100.0, 10000, 0, f).alpha > 0.9)
+        check("short line still fades in and out", TextAnimator.frame(tiny, 1005.0, 10000, 0, f).alpha < 0.5 && TextAnimator.frame(tiny, 1195.0, 10000, 0, f).alpha < 0.5)
         check("endMs=0 runs to song end", TextAnimator.frame(open, 9400.0, 10000, 0, f).visible && !TextAnimator.frame(open, 10000.0, 10000, 0, f).visible)
         check("same input same frame", TextAnimator.frame(t, 1234.0, 10000, 0, f).alpha == TextAnimator.frame(t, 1234.0, 10000, 0, f).alpha)
         val wv = WaveLayer("v", startMs = 2000, endMs = 4000)
@@ -158,7 +161,7 @@ fun main() {
         check("duplicate ids made unique", s.layers.map { it.id }.toSet().size == 3)
         check("unknown shape falls back", (s.layers[2] as WaveLayer).shape == WaveShape.MIRRORED)
         check("garbage root => empty scene", SceneParser.parse("zzz").layers.isEmpty() && SceneParser.parse(null).layers.isEmpty())
-        check("layer limit", SceneParser.parse(mapOf("layers" to (0 until 100).map { mapOf("type" to "text", "text" to "a") })).layers.size == SceneParser.MAX_LAYERS)
+        check("layer limit", SceneParser.parse(mapOf("layers" to (0 until 300).map { mapOf("type" to "text", "text" to "a") })).layers.size == SceneParser.MAX_LAYERS && SceneParser.MAX_LAYERS == 160)
         check("legacy bridge settings", (WaveLayer("l", shape = WaveShape.BARS, height = 0.3).toLegacy().style.wire == "bars"))
     }
     println("passed=$passed failed=$failed")

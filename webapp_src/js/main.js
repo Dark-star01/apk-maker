@@ -1,7 +1,7 @@
 // App bootstrap: wires state -> views and the static controls.
 import { $ } from './ui/dom.js';
-import { state, subscribe, setProject, setTab, isBusy } from './ui/state.js';
-import { renderTracks, renderPanel, renderTabs } from './ui/panels.js';
+import { state, subscribe, subscribeLight, setProject, setTab, isBusy } from './ui/state.js';
+import { renderTracks, renderPanel, renderTabs, panelSigRefresh } from './ui/panels.js';
 import { renderPreview, fitPreview } from './ui/preview.js';
 import { openNewProject, openProjects } from './ui/dialogs.js';
 import { openExport } from './ui/exportDialog.js';
@@ -9,6 +9,7 @@ import { verify } from './ui/media.js';
 import { sync, draw, initPlayback } from './ui/playback.js';
 import { syncWave, initAnalysis } from './ui/analysis.js';
 import { syncPreview, initPreview } from './ui/nativePreview.js';
+import { undo, redo } from './ui/sceneOps.js';
 import { store } from './core/store.js';
 
 let lastProjectId = null;
@@ -38,14 +39,32 @@ function render() {
   }
 }
 
+// A slider is being dragged / text typed: the controls stay as they are; only the preview and the timeline bars follow.
+let lightPending = false;
+function renderLight() {
+  if (lightPending) return;
+  lightPending = true;
+  requestAnimationFrame(() => {
+    lightPending = false;
+    if (!state.project) return;
+    panelSigRefresh();
+    renderTracks();
+    renderTabs();
+    syncPreview();
+  });
+}
+
 async function start() {
   subscribe(render);
+  subscribeLight(renderLight);
 
   initPlayback();
   initAnalysis();
   initPreview();
   $('#btn-project').addEventListener('click', openProjects);
   $('#btn-export').addEventListener('click', () => { if (state.project) openExport(); });
+  $('#btn-undo').addEventListener('click', undo);
+  $('#btn-redo').addEventListener('click', redo);
   $('#tabs').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-tab]');
     if (b) setTab(b.dataset.tab);

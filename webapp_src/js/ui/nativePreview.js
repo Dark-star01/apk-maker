@@ -44,7 +44,8 @@ export function projectPayload(project) {
     durationMs: a ? a.durationMs : 0,
     effects: project.effects,
     aspect: aw / ah,
-    wave: project.wave,
+    // The whole scene: native draws exactly these layers in Preview and in Export (same payload, same Renderer).
+    scene: { layers: project.scene.layers },
   };
 }
 
@@ -109,8 +110,9 @@ export function waveLine() {
   const d = state.pv.info;
   if (!bridge.isNative()) return 'Waveform overlay: app only';
   if (!d || !d.waveStatus) return 'Waveform overlay: waiting…';
-  const names = { on: 'ENABLED', off: 'DISABLED', 'no data': 'ENABLED · data MISSING' };
-  return 'Waveform overlay: ' + (names[d.waveStatus] || d.waveStatus) + ' · style: ' + d.waveStyle + (d.waveError ? ' · error: ' + d.waveError : ' · error: none');
+  const names = { scene: 'SCENE', 'scene (no data)': 'SCENE · audio data MISSING', on: 'LEGACY ON', off: 'OFF', 'no data': 'LEGACY · data MISSING' };
+  const n = state.project ? state.project.scene.layers.length : 0;
+  return 'Scene: ' + (names[d.waveStatus] || d.waveStatus) + ' · layers sent: ' + n + (d.waveError ? ' · error: ' + d.waveError : ' · error: none');
 }
 
 function paintDiag() {
@@ -123,7 +125,7 @@ function paintDiag() {
 export function rendererRepaint() { paintDiag(); }
 
 async function pollDiag() {
-  if (!state.project || (state.tab !== 'fx' && state.tab !== 'settings') || document.visibilityState === 'hidden') return;
+  if (!state.project || !state.diagOpen || document.visibilityState === 'hidden') return;
   try { state.pv.info = await bridge.getRendererState(); } catch (e) { state.pv.info = null; }
   paintDiag();
 }

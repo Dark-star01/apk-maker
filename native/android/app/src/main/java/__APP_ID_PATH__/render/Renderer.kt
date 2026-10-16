@@ -53,7 +53,7 @@ internal class Renderer {
     private var durationMs = 0L
     @Volatile var waveStatus = "off"
         private set
-    val waveError: String? get() = overlay.lastError
+    val waveError: String? get() = overlay.lastError ?: sceneOverlay.lastError
 
     private val composer = FrameComposer()
     private val matrix = Matrix()

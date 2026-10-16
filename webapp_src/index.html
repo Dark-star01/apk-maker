@@ -1,50 +1,58 @@
 <!doctype html>
-<html lang="en" dir="ltr">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#080810">
-  <title>Music Video Maker</title>
+  <meta name="theme-color" content="#0b0b14">
+  <title>Dark Studio</title>
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
   <div id="app">
     <header class="topbar">
-      <button id="btn-project" class="chip" type="button"><span id="project-name">Project</span><span class="caret">▾</span></button>
-      <button id="btn-export" class="primary" type="button">Export</button>
+      <button id="btn-project" class="chip" type="button" aria-label="المشاريع"><span class="brand">◐</span><span id="project-name">المشروع</span><span class="caret">▾</span></button>
+      <div class="top-actions">
+        <button id="btn-undo" class="icon-btn" type="button" aria-label="تراجع" disabled>↶</button>
+        <button id="btn-redo" class="icon-btn" type="button" aria-label="إعادة" disabled>↷</button>
+        <button id="btn-export" class="primary" type="button">تصدير</button>
+      </div>
     </header>
 
-    <!-- Stage: the native renderer view will be placed over #preview (same rect) from Phase 6 -->
+    <!-- Stage: the native renderer view is placed over #preview (same rect); this element only provides position and size. -->
     <section class="stage" id="stage">
       <div id="preview" class="preview-frame">
         <div class="preview-label">
-          <strong>PREVIEW</strong>
+          <strong>DARK STUDIO</strong>
           <span id="preview-info"></span>
-          <span id="preview-time" class="preview-time">00:00 / 00:00</span>
+          <span id="preview-time" class="preview-time" dir="ltr">00:00 / 00:00</span>
         </div>
       </div>
     </section>
 
-    <section class="transport">
-      <button id="btn-play" class="play" type="button" disabled aria-label="Play">▶</button>
+    <section class="transport" dir="ltr">
+      <button id="btn-play" class="play" type="button" disabled aria-label="تشغيل">▶</button>
       <span id="time-current" class="time">00:00</span>
-      <input id="seek" type="range" min="0" max="1000" value="0" disabled aria-label="Seek">
+      <input id="seek" type="range" min="0" max="1000" value="0" disabled aria-label="التقدّم">
       <span id="time-total" class="time">00:00</span>
     </section>
 
-    <section class="tracks" id="tracks" aria-label="Timeline">
-      <div class="ruler" dir="ltr"><span>00:00</span><span id="ruler-mid">00:00</span><span id="ruler-end">00:00</span></div>
-      <div id="lanes"></div>
+    <!-- The time axis always runs left to right (like every audio tool); only the top part scrubs. -->
+    <section class="tracks" id="tracks" dir="ltr" aria-label="الخط الزمني">
+      <div id="scrub" class="scrub">
+        <div class="ruler"><span>00:00</span><span id="ruler-mid">00:00</span><span id="ruler-end">00:00</span></div>
+        <div id="lane-audio"></div>
+      </div>
+      <div id="lanes" class="lanes-scroll"></div>
       <div id="playhead" class="playhead" hidden></div>
     </section>
 
     <section class="panel" id="panel"></section>
 
     <nav class="tabs" id="tabs">
-      <button type="button" data-tab="media" class="active">Media</button>
-      <button type="button" data-tab="wave">Wave</button>
-      <button type="button" data-tab="fx">FX</button>
-      <button type="button" data-tab="settings">Settings</button>
+      <button type="button" data-tab="layers" class="active">الطبقات</button>
+      <button type="button" data-tab="templates">القوالب</button>
+      <button type="button" data-tab="media">الوسائط</button>
+      <button type="button" data-tab="motion">الحركة</button>
     </nav>
   </div>
 

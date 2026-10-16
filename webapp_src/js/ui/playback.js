@@ -226,7 +226,7 @@ export function draw(force) {
   const btn = $('#btn-play');
   setText('#btn-play', playing ? '⏸' : '▶');
   btn.disabled = pl.status === 'loading';
-  btn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  btn.setAttribute('aria-label', playing ? 'إيقاف مؤقت' : 'تشغيل');
 
   const seek = $('#seek');
   seek.disabled = !canSeek();
@@ -239,7 +239,7 @@ export function draw(force) {
     const width = $('#tracks').clientWidth - 2 * PAD;
     head.style.transform = 'translateX(' + (Math.max(0, width) * rs.progress).toFixed(1) + 'px)';
   }
-  $('#tracks').classList.toggle('seekable', canSeek());
+  $('#scrub').classList.toggle('seekable', canSeek());
 }
 
 // ── Wiring (once) ───────────────────────────────────────────────────────────
@@ -247,17 +247,18 @@ export function initPlayback() {
   $('#btn-play').addEventListener('click', toggle);
 
   const tracks = $('#tracks');
+  const scrub = $('#scrub');
   const ratioOf = (e) => {
     const r = tracks.getBoundingClientRect();
     return (e.clientX - r.left - PAD) / Math.max(1, r.width - 2 * PAD);
   };
-  tracks.addEventListener('pointerdown', (e) => {
-    try { tracks.setPointerCapture(e.pointerId); } catch (err) { /* older WebViews */ }
+  scrub.addEventListener('pointerdown', (e) => {
+    try { scrub.setPointerCapture(e.pointerId); } catch (err) { /* older WebViews */ }
     scrubStart(ratioOf(e));
   });
-  tracks.addEventListener('pointermove', (e) => scrubMove(ratioOf(e)));
-  tracks.addEventListener('pointerup', (e) => scrubEnd(ratioOf(e)));
-  tracks.addEventListener('pointercancel', () => scrubEnd());
+  scrub.addEventListener('pointermove', (e) => scrubMove(ratioOf(e)));
+  scrub.addEventListener('pointerup', (e) => scrubEnd(ratioOf(e)));
+  scrub.addEventListener('pointercancel', () => scrubEnd());
 
   const seek = $('#seek');
   seek.addEventListener('input', () => {

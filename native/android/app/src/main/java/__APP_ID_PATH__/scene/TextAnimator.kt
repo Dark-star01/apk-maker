@@ -28,8 +28,13 @@ internal object TextAnimator {
         if (!l.visible || l.text.isBlank() || tMs < l.startMs || (end > 0L && tMs >= end)) return out
         out.visible = true
         val local = tMs - l.startMs
-        val inP = if (l.inMs > 0L) l.easing.apply(local / l.inMs.toDouble()) else 1.0
-        val raw = if (l.inMs > 0L) (local / l.inMs.toDouble()).coerceIn(0.0, 1.0) else 1.0
+        // In/out animations never take more than half of the layer's life each, so a short line is still readable in the middle
+        // (a 0.2 s line with a 0.4 s fade-in and a 0.3 s fade-out would otherwise never be fully visible).
+        val span = if (end > 0L) (end - l.startMs).toDouble() else Double.MAX_VALUE
+        val inMs = Math.min(l.inMs.toDouble(), span / 2.0)
+        val outMs = Math.min(l.outMs.toDouble(), span / 2.0)
+        val inP = if (inMs > 0.0) l.easing.apply(local / inMs) else 1.0
+        val raw = if (inMs > 0.0) (local / inMs).coerceIn(0.0, 1.0) else 1.0
         var alpha = 1.0; var dy = 0.0; var scale = 1.0
         val perUnitReveal = l.reveal != TextReveal.LINE && units > 0
         when (l.animIn) {
@@ -39,8 +44,8 @@ internal object TextAnimator {
             TextAnim.SLIDE_DOWN -> { dy = -(1.0 - inP) * SLIDE; alpha = if (perUnitReveal) 1.0 else inP }
             TextAnim.POP -> { scale = 0.6 + 0.4 * Easing.BACK_OUT.apply(raw); alpha = if (perUnitReveal) 1.0 else Math.min(1.0, raw * 2.0) }
         }
-        if (end > 0L && l.outMs > 0L && tMs > end - l.outMs) {
-            val o = l.easing.apply((tMs - (end - l.outMs)) / l.outMs.toDouble())
+        if (end > 0L && outMs > 0.0 && tMs > end - outMs) {
+            val o = l.easing.apply((tMs - (end - outMs)) / outMs)
             when (l.animOut) {
                 TextAnim.NONE -> {}
                 TextAnim.FADE -> alpha *= 1.0 - o

@@ -2,11 +2,33 @@
 // Keep it additive: new features add new keys with defaults; never rename existing keys
 // without bumping SCHEMA_VERSION and adding a migration in migrate().
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2; // v2: `scene` (layers of waves + text) and `templateId`; v1 projects are migrated in migrate()
 
 export const ASPECTS = { '16:9': [16, 9], '9:16': [9, 16], '1:1': [1, 1] };
 export const RESOLUTIONS = ['360p', '420p', '720p'];
-export const WAVE_STYLES = ['line', 'bars', 'mirrored'];
+export const WAVE_STYLES = ['line', 'bars', 'mirrored']; // v1 names (legacy `wave` key); every one of them is also a scene shape
+// Every waveform shape the native renderer can draw (wire names must match scene/SceneModel.kt WaveShape).
+export const WAVE_SHAPES = ['mirrored', 'bars', 'line', 'neonBars', 'spectrumMirror', 'dots', 'radial', 'ring', 'ribbon', 'glowLine'];
+export const TEXT_FONTS = ['sans', 'serif', 'mono', 'condensed', 'light', 'medium', 'cursive', 'casual'];
+export const TEXT_ANIMS = ['none', 'fade', 'slideUp', 'slideDown', 'pop'];
+export const TEXT_REVEALS = ['line', 'words', 'chars'];
+export const TEXT_ALIGNS = ['left', 'center', 'right'];
+export const MAX_LAYERS = 160; // native SceneParser.MAX_LAYERS must be >= this
+export const MAX_TEXT_CHARS = 600;
+export const LAYER_TYPES = ['wave', 'text'];
+
+// Which controls each shape really honours in the native renderer (the UI only shows these; no fake sliders).
+// legacy shapes (line/bars/mirrored) run the original overlay: colour, position, size, audio source, opacity, timing.
+const BAND = ['color', 'gradient', 'position', 'height', 'thickness', 'glow', 'intensity', 'opacity', 'reactive'];
+export const SHAPE_CAPS = {
+  mirrored: ['color', 'position', 'height', 'opacity', 'reactive'],
+  bars: ['color', 'position', 'height', 'opacity', 'reactive'],
+  line: ['color', 'position', 'height', 'opacity', 'reactive'],
+  neonBars: BAND, spectrumMirror: BAND, dots: BAND,
+  radial: ['color', 'gradient', 'center', 'size', 'thickness', 'glow', 'intensity', 'opacity', 'reactive'],
+  ring: ['color', 'gradient', 'center', 'size', 'thickness', 'glow', 'intensity', 'opacity', 'reactive'],
+  ribbon: [...BAND, 'speed'], glowLine: [...BAND, 'speed'],
+};
 // MVP exposes bottom + custom; top/center are accepted by the schema for later.
 export const WAVE_POSITIONS = ['top', 'center', 'bottom', 'custom'];
 export const WAVE_COLOR_MODES = ['manual', 'adaptive'];
@@ -33,6 +55,7 @@ export function defaults() {
       audio: null,
       background: null,
     },
+    // LEGACY (schema v1). Kept only so old data is never lost and migrate() can read it; the app no longer edits or sends it.
     wave: {
       enabled: true,
       style: 'mirrored',
@@ -53,6 +76,9 @@ export function defaults() {
     //   intensity  0..2 amount of every reaction;  smoothing  0..1 (0 snappy, 1 very smooth);  seed  shake pattern id
     // (backgroundMotion above is the Phase 1 placeholder and is not used by the engine.)
     effects: { preset: 'pulse', motion: 'slowZoom', intensity: 1, smoothing: 0.5, seed: 1 },
+    // v2: everything drawn over the picture, bottom to top. Layer shapes: see defaultWaveLayer / defaultTextLayer.
+    scene: { layers: [] },
+    templateId: null, // the template last applied (informational; the scene itself is the truth)
     // Where the user left off (ms). Restored paused when the project is reopened.
     playhead: { positionMs: 0 },
     // Reserved so future engines can store settings without a schema bump.
@@ -115,8 +141,102 @@ export function sanitizeBackground(b) {
   };
 }
 
+// ── Layers ─────────────────────────────────────────────────────────────────
+let layerCounter = 0;
+export function newLayerId(type) {
+  layerCounter += 1;
+  return (type === 'text' ? 't' : 'w') + Date.now().toString(36) + layerCounter.toString(36) + Math.random().toString(36).slice(2, 5);
+}
+
+export function defaultWaveLayer(shape = 'mirrored') {
+  const radialLike = shape === 'radial' || shape === 'ring';
+  return {
+    id: newLayerId('wave'), type: 'wave', visible: true, startMs: 0, endMs: 0,
+    shape, color: '#ffffff', color2: '#a29bfe', gradient: false, colorMode: 'manual',
+    position: radialLike ? 'center' : 'bottom', customY: 0.8, height: shape === 'ribbon' || shape === 'glowLine' ? 0.22 : 0.18,
+    reactive: true, reactTo: 'volume', thickness: 1, opacity: 1, intensity: 1, glow: radialLike || shape === 'neonBars' ? 0.5 : 0,
+    speed: 1, size: 0.22, cx: 0.5, cy: 0.5,
+  };
+}
+
+export function defaultTextLayer(text = '') {
+  return {
+    id: newLayerId('text'), type: 'text', visible: true, startMs: 0, endMs: 0,
+    text, font: 'sans', bold: true, italic: false, size: 0.06, color: '#ffffff', align: 'center', x: 0.5, y: 0.5,
+    maxWidth: 0.84, lineSpacing: 1.2, animIn: 'fade', animOut: 'fade', reveal: 'line', easing: 'easeOut',
+    inMs: 400, outMs: 300, revealMs: 0, shadow: true, outline: false, outlineColor: '#000000',
+    box: false, boxColor: '#000000', boxOpacity: 0.45, opacity: 1,
+  };
+}
+
+const HEX = /^#[0-9a-fA-F]{6}$/;
+const color = (v, fb) => (typeof v === 'string' && HEX.test(v) ? v.toLowerCase() : fb);
+const bool = (v, fb) => (typeof v === 'boolean' ? v : fb);
+const ms = (v) => { v = Math.round(Number(v)); return Number.isFinite(v) && v > 0 ? Math.min(v, 86400000) : 0; };
+
+// One clean layer or null. Mirrors native SceneParser's limits so what the UI shows is what native draws.
+export function sanitizeLayer(raw) {
+  if (!isObj(raw) || !LAYER_TYPES.includes(raw.type)) return null;
+  const id = typeof raw.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(raw.id) ? raw.id : newLayerId(raw.type);
+  if (raw.type === 'wave') {
+    const d = defaultWaveLayer(pick(raw.shape, WAVE_SHAPES, 'mirrored'));
+    return {
+      ...d, id, visible: bool(raw.visible, true), startMs: ms(raw.startMs), endMs: ms(raw.endMs),
+      shape: pick(raw.shape, WAVE_SHAPES, d.shape), color: color(raw.color, d.color), color2: color(raw.color2, d.color2),
+      gradient: bool(raw.gradient, false), colorMode: pick(raw.colorMode, WAVE_COLOR_MODES, 'manual'),
+      position: pick(raw.position, WAVE_POSITIONS, d.position), customY: clamp(Number(raw.customY), 0, 1, d.customY),
+      height: clamp(Number(raw.height), 0.05, 0.5, d.height), reactive: bool(raw.reactive, true),
+      reactTo: pick(raw.reactTo, REACT_SOURCES, 'volume'), thickness: clamp(Number(raw.thickness), 0.4, 3, 1),
+      opacity: clamp(Number(raw.opacity), 0, 1, 1), intensity: clamp(Number(raw.intensity), 0, 2, 1),
+      glow: clamp(Number(raw.glow), 0, 1, d.glow), speed: clamp(Number(raw.speed), 0, 2, 1),
+      size: clamp(Number(raw.size), 0.08, 0.45, 0.22), cx: clamp(Number(raw.cx), 0, 1, 0.5), cy: clamp(Number(raw.cy), 0, 1, 0.5),
+    };
+  }
+  const d = defaultTextLayer();
+  return {
+    ...d, id, visible: bool(raw.visible, true), startMs: ms(raw.startMs), endMs: ms(raw.endMs),
+    text: String(raw.text == null ? '' : raw.text).slice(0, MAX_TEXT_CHARS),
+    font: pick(raw.font, TEXT_FONTS, 'sans'), bold: bool(raw.bold, true), italic: bool(raw.italic, false),
+    size: clamp(Number(raw.size), 0.02, 0.25, d.size), color: color(raw.color, d.color), align: pick(raw.align, TEXT_ALIGNS, 'center'),
+    x: clamp(Number(raw.x), 0, 1, 0.5), y: clamp(Number(raw.y), 0, 1, 0.5), maxWidth: clamp(Number(raw.maxWidth), 0.2, 1, d.maxWidth),
+    lineSpacing: clamp(Number(raw.lineSpacing), 0.8, 2, d.lineSpacing),
+    animIn: pick(raw.animIn, TEXT_ANIMS, 'fade'), animOut: pick(raw.animOut, TEXT_ANIMS, 'fade'), reveal: pick(raw.reveal, TEXT_REVEALS, 'line'),
+    easing: pick(raw.easing, ['linear', 'easeOut', 'easeInOut', 'backOut'], 'easeOut'),
+    inMs: Math.min(3000, ms(raw.inMs == null ? d.inMs : raw.inMs)), outMs: Math.min(3000, ms(raw.outMs == null ? d.outMs : raw.outMs)),
+    revealMs: Math.min(20000, ms(raw.revealMs)), shadow: bool(raw.shadow, true), outline: bool(raw.outline, false),
+    outlineColor: color(raw.outlineColor, '#000000'), box: bool(raw.box, false), boxColor: color(raw.boxColor, '#000000'),
+    boxOpacity: clamp(Number(raw.boxOpacity), 0, 1, d.boxOpacity), opacity: clamp(Number(raw.opacity), 0, 1, 1),
+  };
+}
+
+export function sanitizeLayers(list) {
+  if (!Array.isArray(list)) return [];
+  const out = []; const seen = new Set();
+  for (const raw of list) {
+    if (out.length >= MAX_LAYERS) break;
+    const l = sanitizeLayer(raw);
+    if (!l) continue;
+    if (seen.has(l.id)) l.id = newLayerId(l.type);
+    seen.add(l.id); out.push(l);
+  }
+  return out;
+}
+
+// v1 -> v2: the single legacy wave overlay becomes the first scene layer (same style/colour/position/size, so the picture does not change).
 function migrate(raw) {
-  // v1 is the first version. Future: if (raw.schemaVersion < 2) { ... }
+  if (!isObj(raw)) return raw;
+  const v = Number(raw.schemaVersion) || 1;
+  if (v < 2 && !(isObj(raw.scene) && Array.isArray(raw.scene.layers))) {
+    const layers = [];
+    const w = raw.wave;
+    if (isObj(w) && w.enabled !== false) {
+      layers.push({
+        type: 'wave', shape: w.style, color: w.color, colorMode: w.colorMode, position: w.position, customY: w.customY,
+        height: w.height, reactive: w.reactive, reactTo: w.reactTo,
+      });
+    }
+    return { ...raw, scene: { layers } };
+  }
   return raw;
 }
 
@@ -139,6 +259,8 @@ export function normalizeProject(raw) {
   p.effects.intensity = clamp(Number(p.effects.intensity), 0, 2, d.effects.intensity);
   p.effects.smoothing = clamp(Number(p.effects.smoothing), 0, 1, d.effects.smoothing);
   p.effects.seed = Number.isInteger(p.effects.seed) ? Math.max(0, Math.min(1000000, p.effects.seed)) : d.effects.seed;
+  p.scene = { layers: sanitizeLayers(p.scene && p.scene.layers) };
+  p.templateId = typeof p.templateId === 'string' ? p.templateId.slice(0, 40) : null;
   p.media.audio = sanitizeAudio(p.media.audio);
   p.media.background = sanitizeBackground(p.media.background);
   p.playhead.positionMs = nonNeg(p.playhead.positionMs);

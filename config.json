@@ -1,7 +1,7 @@
 {
-  "appName": "Music Video Maker",
+  "appName": "Dark Studio",
   "appId": "com.dark.musicvideomaker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "capacitorVersion": "7.6.9",
   "native": {
     "enabled": true,

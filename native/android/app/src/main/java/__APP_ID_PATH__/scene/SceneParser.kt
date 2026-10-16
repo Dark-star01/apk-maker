@@ -10,7 +10,7 @@ import __APP_ID__.render.WaveSource
  * the number of layers is limited. Garbage in never throws; it just yields fewer layers.
  */
 internal object SceneParser {
-    const val MAX_LAYERS = 24
+    const val MAX_LAYERS = 160
     const val MAX_TEXT_CHARS = 600
 
     fun parse(root: Any?): Scene {

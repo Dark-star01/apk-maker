@@ -9,7 +9,7 @@ import java.io.File
 
 /**
  * Makes a finished export reachable by other apps without any storage permission: on Android 10+ the file is copied
- * into the shared Movies/Music Video Maker folder through MediaStore (the supported mechanism) and the resulting content
+ * into the shared Movies/Dark Studio folder through MediaStore (the supported mechanism) and the resulting content
  * Uri is used for Share / Open. The app-private original stays where it is.
  */
 internal object ExportShare {
@@ -23,7 +23,7 @@ internal object ExportShare {
         val values = ContentValues()
         values.put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
         values.put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
-        values.put(MediaStore.MediaColumns.RELATIVE_PATH, "Movies/Music Video Maker")
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH, "Movies/Dark Studio")
         values.put(MediaStore.MediaColumns.IS_PENDING, 1)
         val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
             ?: throw ExportException(UNSUPPORTED, "The system refused to create the shared video")

@@ -76,17 +76,17 @@ export function reanalyze() {
 // ── What the UI shows ───────────────────────────────────────────────────────
 export function waveLabel() {
   const w = state.wave;
-  if (!state.project.media.audio) return 'Waveform appears after you choose audio';
-  if (!bridge.isNative()) return 'Waveform needs the app';
-  if (w.status === 'loading') return 'Loading waveform…';
-  if (w.status === 'analyzing') return 'Analyzing audio… ' + Math.round(w.progress * 100) + '%';
-  if (w.status === 'error') return 'Waveform unavailable';
+  if (!state.project.media.audio) return 'يظهر تحليل الصوت بعد اختيار أغنية';
+  if (!bridge.isNative()) return 'تحليل الصوت يعمل داخل التطبيق فقط';
+  if (w.status === 'loading') return 'جارٍ تحميل التحليل…';
+  if (w.status === 'analyzing') return 'جارٍ تحليل الصوت… ' + Math.round(w.progress * 100) + '%';
+  if (w.status === 'error') return 'تعذّر تحليل الصوت';
   return '';
 }
 
 export function waveSummary() {
   const w = state.wave;
-  if (w.status === 'ready') return w.data.count + ' points · ' + w.data.sampleRate + '/s · bass, mid, treble';
+  if (w.status === 'ready') return w.data.count + ' نقطة · ' + w.data.sampleRate + '/ث · جهير ومتوسط وحاد';
   return waveLabel() || '—';
 }
 

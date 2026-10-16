@@ -13,8 +13,8 @@ import { openSheet, closeSheet } from './dialogs.js';
 
 const POLL_MS = 800;
 const LABELS = {
-  idle: '', preparing: 'Preparing…', encodingAudio: 'Encoding audio…', rendering: 'Rendering video…',
-  finalizing: 'Finalizing and checking the file…', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled',
+  idle: '', preparing: 'جارٍ التحضير…', encodingAudio: 'جارٍ ترميز الصوت…', rendering: 'جارٍ رسم الفيديو…',
+  finalizing: 'جارٍ إنهاء الملف وفحصه…', completed: 'اكتمل التصدير', failed: 'فشل التصدير', cancelled: 'أُلغي التصدير',
 };
 const ACTIVE = { preparing: 1, encodingAudio: 1, rendering: 1, finalizing: 1 };
 
@@ -94,14 +94,15 @@ export function openExport() {
     const size = outputSize(p.aspectRatio, p.resolution);
     clear(info);
     info.append(
-      h('div', { class: 'hint' }, 'Resolution'),
+      h('div', { class: 'hint' }, 'الدقة'),
       h('div', { class: 'seg' }, RESOLUTIONS.map((r) =>
         h('button', {
           type: 'button', class: r === p.resolution ? 'on' : '', disabled: active,
           onclick: () => { mutate((x) => { x.resolution = r; }); render(); },
         }, r))),
       h('div', { class: 'hint', style: { marginTop: '10px' } },
-        `${p.aspectRatio} · ${size.width}×${size.height} · ${p.fps} fps · H.264 + AAC (MP4)`));
+        `${p.aspectRatio} · ${size.width}×${size.height} · ${p.fps} fps · H.264 + AAC (MP4)`),
+      h('div', { class: 'hint', style: { marginTop: '6px' } }, `سيُصدَّر ما تراه في المعاينة: ${p.scene.layers.filter((l) => l.visible).length} طبقة ظاهرة.`));
 
     clear(status);
     const s = job;
@@ -111,14 +112,14 @@ export function openExport() {
       if (ACTIVE[s.state] || s.state === 'completed') {
         status.append(
           h('div', { class: 'export-bar', role: 'progressbar', 'aria-valuenow': String(pct) }, h('div', { class: 'export-fill', style: { width: pct + '%' } })),
-          h('div', { class: 'hint', dir: 'ltr', 'data-exp': 'pct' }, pct + '%' + (s.state === 'rendering' && s.frames ? ` · frame ${s.frame}/${s.frames}` : '')));
+          h('div', { class: 'hint', dir: 'ltr', 'data-exp': 'pct' }, pct + '%' + (s.state === 'rendering' && s.frames ? ` · الإطار ${s.frame}/${s.frames}` : '')));
       }
       if (s.width && (ACTIVE[s.state] || s.state === 'completed')) {
-        status.append(h('div', { class: 'hint', dir: 'ltr', 'data-exp': 'actual' }, `Encoding ${s.width}×${s.height} @ ${s.fps} fps`));
+        status.append(h('div', { class: 'hint', dir: 'ltr', 'data-exp': 'actual' }, `الترميز ${s.width}×${s.height} @ ${s.fps} fps`));
       }
       if (s.state === 'completed') {
         status.append(h('div', { class: 'hint', dir: 'ltr', 'data-exp': 'file' },
-          `${s.outputName} · ${fmtSize(s.sizeBytes || 0)} · ${fmtDur(s.durationMs || 0)} · saved inside the app (Share / Open copies it to Movies)`));
+          `${s.outputName} · ${fmtSize(s.sizeBytes || 0)} · ${fmtDur(s.durationMs || 0)} · محفوظ داخل التطبيق (المشاركة/الفتح تنسخه إلى Movies)`));
       }
       if (s.state === 'failed') {
         status.append(h('div', { class: 'value missing', dir: 'auto', 'data-exp': 'error' }, errorMessage({ code: s.errorCode })));
@@ -130,23 +131,23 @@ export function openExport() {
     clear(actions);
     if (active) {
       actions.append(
-        h('button', { class: 'btn', type: 'button', disabled: true }, 'Close'),
-        h('button', { class: 'btn accent', type: 'button', 'data-exp': 'cancel', onclick: cancel }, 'Cancel export'));
+        h('button', { class: 'btn', type: 'button', disabled: true }, 'إغلاق'),
+        h('button', { class: 'btn accent', type: 'button', 'data-exp': 'cancel', onclick: cancel }, 'إلغاء التصدير'));
     } else {
-      actions.append(h('button', { class: 'btn', type: 'button', onclick: () => { paint = null; closeSheet(); } }, 'Close'));
+      actions.append(h('button', { class: 'btn', type: 'button', onclick: () => { paint = null; closeSheet(); } }, 'إغلاق'));
       if (job && job.state === 'completed' && job.outputPath) {
         actions.append(
-          h('button', { class: 'btn', type: 'button', 'data-exp': 'open', onclick: () => viewFile('open') }, 'Open'),
-          h('button', { class: 'btn', type: 'button', 'data-exp': 'share', onclick: () => viewFile('share') }, 'Share'));
+          h('button', { class: 'btn', type: 'button', 'data-exp': 'open', onclick: () => viewFile('open') }, 'فتح'),
+          h('button', { class: 'btn', type: 'button', 'data-exp': 'share', onclick: () => viewFile('share') }, 'مشاركة'));
       }
       actions.append(h('button', { class: 'btn accent', type: 'button', 'data-exp': 'start', onclick: start },
-        job && job.state === 'completed' ? 'Export again' : 'Export'));
+        job && job.state === 'completed' ? 'تصدير مرة أخرى' : 'تصدير'));
     }
   };
   paint = render;
   render();
 
-  openSheet(h('h2', {}, 'Export'), info, status, actions);
+  openSheet(h('h2', {}, 'تصدير الفيديو'), info, status, actions);
   // While a job runs the sheet cannot be dismissed by tapping outside; Cancel is the way out.
   $('#overlay').onclick = (e) => { if (e.target === $('#overlay') && !isActive()) { paint = null; closeSheet(); } };
   // Re-opened while a job is still running: pick the polling up again.

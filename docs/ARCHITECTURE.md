@@ -1,4 +1,4 @@
-# Music Video Maker — Architecture
+# Dark Studio (formerly Music Video Maker) — Architecture
 
 Personal Android app, built with APKMaker 2.0 (Capacitor 7.6.9 + Kotlin 1.9.24, Java 21).
 Priorities: stability > performance > features. Target: ~4 GB RAM device.
@@ -163,7 +163,7 @@ Package `exporter/` (Kotlin). JS only starts/cancels/polls (`startExport`, `canc
 
 **Audio.** `AudioTranscoder`: extractor -> decoder -> AAC-LC encoder -> temporary .m4a, streaming, PTS = samples/rate (no drift). Mono/stereo, 16-bit PCM, standard AAC rates only (others -> clear error). Its REAL duration defines the frame count (`ceil(duration*fps)`). During the video pass the AAC samples are copied by `AudioInterleaver` (0.5 s lead, bounded buffer) into the same `MediaMuxer` (video track + audio track, started when the encoder reports its format).
 
-**Finish.** muxer.stop -> unique name (`Title.mp4`, `Title (2).mp4`, never overwriting) in `projects/<id>/exports/` -> `ExportValidator` re-opens with MediaExtractor (tracks, size, durations, first samples readable; `ExportValidation` tolerances) -> only then `completed`. Failure/cancel deletes temp files and any unvalidated output. Backgrounding pauses the job (foreground-only); screen kept on while exporting. Share/Open copy the file to Movies/Music Video Maker via MediaStore (Android 10+, no permission).
+**Finish.** muxer.stop -> unique name (`Title.mp4`, `Title (2).mp4`, never overwriting) in `projects/<id>/exports/` -> `ExportValidator` re-opens with MediaExtractor (tracks, size, durations, first samples readable; `ExportValidation` tolerances) -> only then `completed`. Failure/cancel deletes temp files and any unvalidated output. Backgrounding pauses the job (foreground-only); screen kept on while exporting. Share/Open copy the file to Movies/Dark Studio via MediaStore (Android 10+, no permission).
 
 Sizes: short side 360/420/720 (same as `outputSize()` in schema.js): 16:9 640×360, 746×420, 1280×720; 9:16 reversed; 1:1 360², 420², 720². An encoder-aligned size is reported as the actual size if the device needs one.
 
@@ -182,3 +182,20 @@ the user adds reaches the video without touching the export engine (its only cha
 - Bridge: `setPreviewProject` and `startExport` accept an optional `scene`; without it nothing changes (legacy `wave` overlay).
 - Tests: `tests/jvm/run.sh` (logic, 569 checks) and `tests/jvm/compilecheck.sh` (type-check + smoke run against android.graphics STUBS,
   not the real SDK). Both need `kotlinc` 1.9.x. Neither replaces a real APK build and an on-device test.
+
+## Dark Studio — Stage C/D (data + UI), what is connected to what
+
+Data path (the same for Preview and Export):
+`UI control -> sceneOps.editLayer/addLayer/... -> project.scene.layers (schema v2, sanitized, saved) -> nativePreview.projectPayload(project)`
+`-> bridge.setPreviewProject / bridge.startExport -> MvmBridgePlugin.parseScene -> SceneParser -> Renderer.setScene -> SceneOverlay`.
+`exportDialog` builds its request with the SAME `projectPayload`, so Preview and Export receive identical layers.
+
+- `core/schema.js` — schema v2: `scene.layers`, `templateId`, `sanitizeLayer(s)` (mirrors the native limits), `migrate()` (v1 `wave` -> first layer, same look), `SHAPE_CAPS` (which controls each shape honours).
+- `core/templates.js` — 8 templates as data; `planTemplate` keeps the user's words and timing (restyles their text layers, replaces waves + effects).
+- `core/history.js`, `ui/sceneOps.js` — undo/redo (60 steps, sliders/typing merged), all scene edits, lyrics split.
+- `ui/panels.js` (timeline bars + dock: layers / templates / media / motion), `ui/inspector.js` (wave + text tools), `ui/sheets.js`, `ui/dialogs.js`, `ui/controls.js`, `ui/icons.js`.
+- Light vs full updates: sliders/typing call `touch()` (data + preview + timeline only; controls are not rebuilt, so dragging/typing is never interrupted); structural edits call `mutate()`.
+- Layout: top bar, centred preview (native view sits over `#preview`), transport, timeline (always LTR; only the top part scrubs), contextual panel, bottom tabs. While a layer is edited the bottom tabs hide so the preview keeps its room.
+
+Tests: `tests/web/run.sh` (real UI in jsdom, 79 checks), `tests/jvm/run.sh|compilecheck.sh|wire.sh` (logic, Android-stub smoke, JS->Kotlin wire contract).
+Layout was audited in headless Chromium at 360x640 and 412x915 (40 screens). None of this replaces a real APK build and device test.
